@@ -26,8 +26,8 @@ from lib.model import D2Net
 
 # CUDA
 use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-
+device = torch.device("cuda:0")
+# if use_cuda else "cpu"
 # Seed
 torch.manual_seed(1)
 if use_cuda:
@@ -38,7 +38,7 @@ np.random.seed(1)
 parser = argparse.ArgumentParser(description='Training script')
 
 parser.add_argument(
-	'--imgPairs', type=str, required=True, 
+	'--imgPairs', type=str, required=True,
 	help='path to opposite image pairs'
 )
 parser.add_argument(
@@ -123,7 +123,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis'
+	plot_path = 'train_vis_gcn'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -131,6 +131,7 @@ if args.plot:
 
 # Creating CNN model
 model = D2Net(
+	config = {},
 	model_file=args.model_file,
 	use_cuda=use_cuda
 )
@@ -230,7 +231,7 @@ if os.path.isdir(args.checkpoint_directory):
 	print('[Warning] Checkpoint directory already exists.')
 else:
 	os.mkdir(args.checkpoint_directory)
-	
+
 
 # Open the log file for writing
 if os.path.exists(args.log_file):
