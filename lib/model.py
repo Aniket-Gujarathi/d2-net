@@ -102,21 +102,21 @@ def attention(query, key, value):
     return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
 
 class MultiHeadedAttention(nn.Module):
-    """ Multi-head attention to increase model expressivitiy """
-    def __init__(self, num_heads: int, d_model: int):
-        super().__init__()
-        assert d_model % num_heads == 0
-        self.dim = d_model // num_heads
-        self.num_heads = num_heads
-        self.merge = nn.Conv1d(d_model, d_model, kernel_size=1)
-        self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
+	""" Multi-head attention to increase model expressivitiy """
+	def __init__(self, num_heads: int, d_model: int):
+		super().__init__()
+		assert d_model % num_heads == 0
+		self.dim = d_model // num_heads
+		self.num_heads = num_heads
+		self.merge = nn.Conv1d(d_model, d_model, kernel_size=1)
+		self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
 
-    def forward(self, query, key, value):
-        batch_dim = query.size(0)
-        query, key, value = [l(x).view(batch_dim, self.dim, self.num_heads, -1)
-                             for l, x in zip(self.proj, (query, key, value))]
-        x, _ = attention(query, key, value)
-        return self.merge(x.contiguous().view(batch_dim, self.dim*self.num_heads, -1))
+	def forward(self, query, key, value):
+		batch_dim = query.size(0)
+		query, key, value = [l(x).view(batch_dim, self.dim, self.num_heads, -1)
+                         	for l, x in zip(self.proj, (query, key, value))]
+		x, _ = attention(query, key, value)
+		return self.merge(x.contiguous().view(batch_dim, self.dim*self.num_heads, -1))
 
 
 class AttentionalPropagation(nn.Module):
@@ -179,18 +179,19 @@ class D2Net(nn.Module):
 
 	def forward(self, batch):
 		b = batch['image1'].size(0)
-
 		dense_features = self.dense_feature_extraction(
 			torch.cat([batch['image1'], batch['image2']], dim=0)
 		)
-
-		scores = self.detection(dense_features)
 
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
 
 		desc0, desc1 = self.gnn(dense_features1, dense_features2)
 
+		dense_features = torch.cat([desc0], [desc1])
+
+		scores = self.detection(dense_features)
+		#print(desc0.size())
 		scores1 = scores[: b, :, :]
 		scores2 = scores[b :, :, :]
 
