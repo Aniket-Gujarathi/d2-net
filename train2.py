@@ -131,7 +131,7 @@ if args.plot:
 
 # Creating CNN model
 model = D2Net(
-	config = {},
+	#config = {},
 	model_file=args.model_file,
 	use_cuda=use_cuda
 )
