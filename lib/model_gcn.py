@@ -41,11 +41,11 @@ class DenseFeatureExtractionModule(nn.Module):
 			for param in list(self.model.parameters())[-2 :]:
 				param.requires_grad = True
 
-		if use_cuda:
-			self.model = self.model.cuda()
+#		if use_cuda:
+#			self.model = self.model.cuda()
 
-#	def return_mod(self):
-#		return self.model
+	def return_mod(self):
+		return self.model
 
 	def forward(self, batch):
 		output = self.model(batch)
@@ -96,37 +96,44 @@ def MLP(channels: list, do_bn=True):
 			if do_bn:
 				layers.append(nn.BatchNorm2d(channels[i]))
 			layers.append(nn.ReLU())
-	return nn.Sequential(*layers)
+	return nn.Sequential(*layers).cuda()
 
 def attention(query, key, value):
-    dim = query.shape[1]
-    scores = torch.einsum('bdhn,bdhm->bhnm', query, key) / dim**.5
-    prob = torch.nn.functional.softmax(scores, dim=-1)
-    return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
+	dim = query.shape[1]
+	scores = torch.einsum('bdhn,bdhm->bhnm', query, key) / dim**.5
+	prob = torch.nn.functional.softmax(scores, dim=-1)
+	return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
 
 class MultiHeadedAttention(nn.Module):
 	""" Multi-head attention to increase model expressivitiy """
-	def __init__(self, num_heads: int, d_model: int):
+	def __init__(self, num_heads: int, d_model: int, mod):
 		super().__init__()
+		self.mod = mod
 		assert d_model % num_heads == 0
 		self.dim = d_model // num_heads
 		self.num_heads = num_heads
 		self.merge = nn.Conv2d(d_model, d_model, kernel_size=1)
-		self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
+		self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)]).cuda()
+		self.mod = nn.Sequential(self.mod, self.merge)
+		self.mod = self.mod.cuda()
+		print(summary(self.mod, (3, 640, 480)))
+
+	def return_mod(self):
+		return self.mod
 
 	def forward(self, query, key, value):
 		batch_dim = query.size(0)
 		query, key, value = [l(x) for l, x in zip(self.proj, (query, key, value))]
 		#.view(batch_dim, self.dim*self.num_heads, -1
-		print('done')
 		x, _ = attention(query, key, value)
 		return self.merge(x.contiguous())
 		#.view(batch_dim, self.dim, self.num_heads, -1)
 
 class AttentionalPropagation(nn.Module):
-	def __init__(self, feature_dim: int, num_heads: int):
+	def __init__(self, feature_dim: int, num_heads: int, mod):
 		super().__init__()
-		self.attn = MultiHeadedAttention(num_heads, feature_dim)
+		self.mod = mod
+		self.attn = MultiHeadedAttention(num_heads, feature_dim, self.mod)
 		self.mlp = MLP([feature_dim*2, feature_dim*2, feature_dim])
 		nn.init.constant_(self.mlp[-1].bias, 0.0)
 
@@ -135,12 +142,16 @@ class AttentionalPropagation(nn.Module):
 		return self.mlp(torch.cat([x, message], dim=1))
 
 class AttentionalGNN(nn.Module):
-	def __init__(self, feature_dim: int, layer_names: list):
+	def __init__(self, mod, feature_dim: int, layer_names: list):
 		super().__init__()
+		self.mod = mod
 		self.layers = nn.ModuleList([
-            AttentionalPropagation(feature_dim, 4)
+            AttentionalPropagation(feature_dim, 4, self.mod)
             for _ in range(len(layer_names))])
 		self.names = layer_names
+
+	def return_mod(self):
+		return self.mod
 
 	def forward(self, desc0, desc1):
 		for layer, name in zip(self.layers, self.names):
@@ -159,7 +170,7 @@ class D2Net(nn.Module):
         'GNN_layers': ['self', 'cross'] * 9,
 	}
 
-	def __init__(self, config, model_file=None, use_cuda=True):
+	def __init__(self, config, mod, model_file=None, use_cuda=True):
 		super(D2Net, self).__init__()
 
 		self.config = {**self.default_config, **config}
@@ -167,10 +178,8 @@ class D2Net(nn.Module):
 			finetune_feature_extraction=True,
 			use_cuda=use_cuda
 		)
-
-		#self.mod = self.dense_feature_extraction.return_mod()
-
-		self.gnn = AttentionalGNN(
+		self.mod = self.dense_feature_extraction.return_mod()
+		self.gnn = AttentionalGNN(self.mod,
             self.config['descriptor_dim'], self.config['GNN_layers'])
 
 		self.final_proj = nn.Conv2d(
@@ -179,18 +188,17 @@ class D2Net(nn.Module):
 
 		self.detection = SoftDetectionModule()
 
+
 		if model_file is not None:
 			if use_cuda:
 				self.load_state_dict(torch.load(model_file)['model'], strict=False)
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
 
-#		if use_cuda:
-#			self.mod = self.mod.cuda()
+		if use_cuda:
+			self.mod = self.mod.cuda()
 #			print(summary(self.mod, (3, 640, 480)))
 
-#	def return_mod(self):
-#		return self.mod
 
 	def forward(self, batch):
 		b = batch['image1'].size(0)
