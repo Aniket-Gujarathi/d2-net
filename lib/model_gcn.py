@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
+from torchsummary import summary
 
 from copy import deepcopy
 from pathlib import Path
@@ -42,6 +43,9 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		if use_cuda:
 			self.model = self.model.cuda()
+
+#	def return_mod(self):
+#		return self.model
 
 	def forward(self, batch):
 		output = self.model(batch)
@@ -83,17 +87,16 @@ class SoftDetectionModule(nn.Module):
 		return score
 
 def MLP(channels: list, do_bn=True):
-    """ Multi-layer perceptron """
-    n = len(channels)
-    layers = []
-    for i in range(1, n):
-        layers.append(
-            nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
-        if i < (n-1):
-            if do_bn:
-                layers.append(nn.BatchNorm1d(channels[i]))
-            layers.append(nn.ReLU())
-    return nn.Sequential(*layers)
+	""" Multi-layer perceptron """
+	n = len(channels)
+	layers = []
+	for i in range(1, n):
+		layers.append(nn.Conv2d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+		if i < (n-1):
+			if do_bn:
+				layers.append(nn.BatchNorm2d(channels[i]))
+			layers.append(nn.ReLU())
+	return nn.Sequential(*layers)
 
 def attention(query, key, value):
     dim = query.shape[1]
@@ -108,19 +111,17 @@ class MultiHeadedAttention(nn.Module):
 		assert d_model % num_heads == 0
 		self.dim = d_model // num_heads
 		self.num_heads = num_heads
-		self.merge = nn.Conv1d(d_model, d_model, kernel_size=1)
+		self.merge = nn.Conv2d(d_model, d_model, kernel_size=1)
 		self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
 
 	def forward(self, query, key, value):
-		print('ab?')
 		batch_dim = query.size(0)
-		print('problem kya hai?')
-		query, key, value = [l(x).view(batch_dim, self.dim, self.num_heads, -1)
-                         	for l, x in zip(self.proj, (query, key, value))]
-		print('gaya')
+		query, key, value = [l(x) for l, x in zip(self.proj, (query, key, value))]
+		#.view(batch_dim, self.dim*self.num_heads, -1
+		print('done')
 		x, _ = attention(query, key, value)
-		return self.merge(x.contiguous().view(batch_dim, self.dim*self.num_heads, -1))
-
+		return self.merge(x.contiguous())
+		#.view(batch_dim, self.dim, self.num_heads, -1)
 
 class AttentionalPropagation(nn.Module):
 	def __init__(self, feature_dim: int, num_heads: int):
@@ -130,7 +131,6 @@ class AttentionalPropagation(nn.Module):
 		nn.init.constant_(self.mlp[-1].bias, 0.0)
 
 	def forward(self, x, source):
-		print('idhar aaya, attn jaata')
 		message = self.attn(x, source, source)
 		return self.mlp(torch.cat([x, message], dim=1))
 
@@ -148,11 +148,8 @@ class AttentionalGNN(nn.Module):
 				src0, src1 = desc1, desc0
 			else:  # if name == 'self':
 				src0, src1 = desc0, desc1
-			print('chalta hu')
 			delta0, delta1 = layer(desc0, src0), layer(desc1, src1)
-			print(desc0.size())
 			desc0, desc1 = (desc0 + delta0), (desc1 + delta1)
-			print('I')
 		return desc0, desc1
 
 class D2Net(nn.Module):
@@ -166,18 +163,19 @@ class D2Net(nn.Module):
 		super(D2Net, self).__init__()
 
 		self.config = {**self.default_config, **config}
-
 		self.dense_feature_extraction = DenseFeatureExtractionModule(
 			finetune_feature_extraction=True,
 			use_cuda=use_cuda
 		)
 
+		#self.mod = self.dense_feature_extraction.return_mod()
+
 		self.gnn = AttentionalGNN(
             self.config['descriptor_dim'], self.config['GNN_layers'])
 
-		self.final_proj = nn.Conv1d(
+		self.final_proj = nn.Conv2d(
         	self.config['descriptor_dim'], self.config['descriptor_dim'],
-            kernel_size=1, bias=True)
+            kernel_size=1, bias=True).cuda()
 
 		self.detection = SoftDetectionModule()
 
@@ -187,20 +185,26 @@ class D2Net(nn.Module):
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
 
+#		if use_cuda:
+#			self.mod = self.mod.cuda()
+#			print(summary(self.mod, (3, 640, 480)))
 
+#	def return_mod(self):
+#		return self.mod
 
 	def forward(self, batch):
 		b = batch['image1'].size(0)
 		dense_features = self.dense_feature_extraction(
 			torch.cat([batch['image1'], batch['image2']], dim=0)
 		)
-
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
+		#dense_features1 = dense_features1.reshape([1, 512, -1])
+		#dense_features2 = dense_features2.reshape([1, 512, -1])
 
-		dense_features1 = dense_features1.transpose(0, 1)
-		dense_features2 = dense_features2.transpose(0, 1)
-
+		#dense_features1 = dense_features1.transpose(0, 2)
+		#dense_features2 = dense_features2.transpose(0, 2)
+		print(dense_features1.size())
 		desc0, desc1 = self.gnn(dense_features1, dense_features2)
 
 		mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
@@ -211,6 +215,8 @@ class D2Net(nn.Module):
 		#print(desc0.size())
 		scores1 = scores[: b, :, :]
 		scores2 = scores[b :, :, :]
+
+
 
 		return {
 			#'dense_features1': dense_features1,
