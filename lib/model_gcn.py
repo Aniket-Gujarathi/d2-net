@@ -48,7 +48,7 @@ class DenseFeatureExtractionModule(nn.Module):
 		return self.model
 
 	def forward(self, batch):
-		output = self.model(batch).cuda()
+		output = self.model(batch)
 		return output
 
 
@@ -131,10 +131,10 @@ class MultiHeadedAttention(nn.Module):
 	def forward(self, query, key, value):
 		batch_dim = query.size(0)
 		query, key, value = [l(x) for l, x in zip(self.proj, (query, key, value))]
-		#.view(batch_dim, self.dim*self.num_heads, -1
+		#.view(batch_dim, self.dim, self.num_heads, -1)
 		x, _ = attention(query, key, value)
 		return self.merge(x.contiguous())
-		#.view(batch_dim, self.dim, self.num_heads, -1)
+		#.view(batch_dim, self.dim*self.num_heads, -1)
 
 class AttentionalPropagation(nn.Module):
 	def __init__(self, feature_dim: int, num_heads: int, mod):
@@ -216,7 +216,7 @@ class D2Net(nn.Module):
 
 		if use_cuda:
 			self.mod = self.mod.cuda()
-			print(self.mod, (3, 640, 480))
+		#	print(self.mod, (3, 640, 480))
 
 
 	def forward(self, batch):
@@ -226,17 +226,15 @@ class D2Net(nn.Module):
 		)
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
+
 		#dense_features1 = dense_features1.reshape([1, 512, -1])
 		#dense_features2 = dense_features2.reshape([1, 512, -1])
 
-		#dense_features1 = dense_features1.transpose(0, 2)
-		#dense_features2 = dense_features2.transpose(0, 2)
-		print(dense_features1.size())
 		desc0, desc1 = self.gnn(dense_features1, dense_features2)
 
 		mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
-
-		dense_features = torch.cat([mdesc0], [mdesc1])
+		#print(mdesc0.size())
+		dense_features = torch.cat([mdesc0, mdesc1], dim=0)
 
 		scores = self.detection(dense_features)
 		#print(desc0.size())
