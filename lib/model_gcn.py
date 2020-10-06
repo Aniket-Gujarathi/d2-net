@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 
 class DenseFeatureExtractionModule(nn.Module):
-	def __init__(self, finetune_feature_extraction=False, use_cuda=False):
+	def __init__(self, finetune_feature_extraction=False, use_cuda=True):
 		super(DenseFeatureExtractionModule, self).__init__()
 
 		model = models.vgg16()
@@ -48,7 +48,7 @@ class DenseFeatureExtractionModule(nn.Module):
 		return self.model
 
 	def forward(self, batch):
-		output = self.model(batch)
+		output = self.model(batch).cuda()
 		return output
 
 
@@ -86,17 +86,26 @@ class SoftDetectionModule(nn.Module):
 
 		return score
 
-def MLP(channels: list, do_bn=True):
-	""" Multi-layer perceptron """
-	n = len(channels)
-	layers = []
-	for i in range(1, n):
-		layers.append(nn.Conv2d(channels[i - 1], channels[i], kernel_size=1, bias=True))
-		if i < (n-1):
-			if do_bn:
-				layers.append(nn.BatchNorm2d(channels[i]))
-			layers.append(nn.ReLU())
-	return nn.Sequential(*layers)
+class MLP():
+
+	def __init__(self, mod, channels: list, do_bn=True):
+		""" Multi-layer perceptron """
+		self.mod = mod
+		n = len(channels)
+		self.layers = []
+		for i in range(1, n):
+			self.layers.append(nn.Conv2d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+			if i < (n-1):
+				if do_bn:
+					self.layers.append(nn.BatchNorm2d(channels[i]))
+				self.layers.append(nn.ReLU())
+		self.mod = nn.Sequential(self.mod, *self.layers)
+
+	def forward(self):
+		return nn.Sequential(*self.layers)
+
+	def return_mod(self):
+		return self.mod
 
 def attention(query, key, value):
 	dim = query.shape[1]
@@ -114,7 +123,7 @@ class MultiHeadedAttention(nn.Module):
 		self.num_heads = num_heads
 		self.merge = nn.Conv2d(d_model, d_model, kernel_size=1)
 		self.proj = nn.ModuleList([deepcopy(self.merge) for _ in range(3)])
-		self.mod = nn.Sequential(self.mod, self.merge)
+		self.mod = nn.Sequential(self.mod, self.proj, self.merge)
 
 	def return_mod(self):
 		return self.mod
@@ -132,9 +141,11 @@ class AttentionalPropagation(nn.Module):
 		super().__init__()
 		self.mod = mod
 		self.attn = MultiHeadedAttention(num_heads, feature_dim, self.mod)
-		self.mlp = MLP([feature_dim*2, feature_dim*2, feature_dim])
-		nn.init.constant_(self.mlp[-1].bias, 0.0)
 		self.mod = self.attn.return_mod()
+		self.perc = MLP(self.mod, [feature_dim*2, feature_dim*2, feature_dim])
+		self.mlp = self.perc.forward()
+		nn.init.constant_(self.mlp[-1].bias, 0.0)
+		self.mod = self.perc.return_mod()
 
 	def return_mod(self):
 		return self.mod
@@ -153,6 +164,7 @@ class AttentionalGNN(nn.Module):
             for _ in range(len(layer_names))])
 		self.names = layer_names
 		self.mod = self.attn.return_mod()
+
 	def return_mod(self):
 		return self.mod
 
@@ -173,7 +185,7 @@ class D2Net(nn.Module):
         'GNN_layers': ['self', 'cross'] * 9,
 	}
 
-	def __init__(self, config, mod, model_file=None, use_cuda=False):
+	def __init__(self, config, model_file=None, use_cuda=True):
 		super(D2Net, self).__init__()
 
 		self.config = {**self.default_config, **config}
@@ -202,9 +214,9 @@ class D2Net(nn.Module):
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'], strict=False)
 
-		#if use_cuda:
-		#	self.mod = self.mod.cuda()
-		#	print(summary(self.mod, (3, 640, 480)))
+		if use_cuda:
+			self.mod = self.mod.cuda()
+			print(self.mod, (3, 640, 480))
 
 
 	def forward(self, batch):
