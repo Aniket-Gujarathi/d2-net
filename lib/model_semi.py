@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
+import torchgeometry as tgm
+
+import matplotlib.pyplot as plt
+from lib.utils import imshow_image
+from sys import exit
 
 
 class DenseFeatureExtractionModule(nn.Module):
@@ -32,7 +37,7 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		# Fix forward parameters
 		for param in self.model.parameters():
-			param.requires_grad = True
+			param.requires_grad = False
 		if finetune_feature_extraction:
 			# Unlock conv4_3
 			for param in list(self.model.parameters())[-2 :]:
@@ -71,7 +76,7 @@ class SoftDetectionModule(nn.Module):
 		local_max_score = exp / (sum_exp )
 
 		depth_wise_max = torch.max(batch, dim=1)[0]
-		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1))
+		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1) )
 
 		all_scores = local_max_score * depth_wise_max_score
 		score = torch.max(all_scores, dim=1)[0]
@@ -79,6 +84,40 @@ class SoftDetectionModule(nn.Module):
 		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1) + 1e-5)
 
 		return score
+
+
+class Align(nn.Module):
+	def __init__(self):
+		super(Align, self).__init__()
+
+		# Resnet-18 features
+		# Predict 8 points (4 pixels) per homography matrix
+
+		points_src = torch.FloatTensor([[
+			[190,210],[455,210],[633,475],[0,475],
+		]]).cuda()
+		points_dst = torch.FloatTensor([[
+			[0, 0], [399, 0], [399, 399], [0, 399],
+		]]).cuda()
+		cropH = tgm.get_perspective_transform(points_src, points_dst)
+
+		points_src = torch.FloatTensor([[
+			[0, 0], [400, 0], [400, 400], [0, 400]
+			]]).cuda()
+		points_dst = torch.FloatTensor([[
+			[400, 400], [0, 400], [0, 0], [400, 0]
+			]]).cuda()
+		flipH = tgm.get_perspective_transform(points_src, points_dst)
+
+		self.H1 = cropH
+		self.H2 = flipH @ cropH
+
+
+	def forward(self, img1, img2):
+		img_warp1 = tgm.warp_perspective(img1, self.H1, dsize=(400, 400))
+		img_warp2 = tgm.warp_perspective(img2, self.H2, dsize=(400, 400))
+
+		return img_warp1, img_warp2, self.H1, self.H2
 
 
 class D2Net(nn.Module):
@@ -94,7 +133,7 @@ class D2Net(nn.Module):
 
 		if model_file is not None:
 			if use_cuda:
-				self.load_state_dict(torch.load(model_file)['model'], strict=False)
+				self.load_state_dict(torch.load(model_file)['model'])
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
 
@@ -118,4 +157,83 @@ class D2Net(nn.Module):
 			'scores1': scores1,
 			'dense_features2': dense_features2,
 			'scores2': scores2
+		}
+
+
+class D2NetAlign(nn.Module):
+	def __init__(self, model_file=None, use_cuda=True):
+		super(D2NetAlign, self).__init__()
+
+		self.alignment = Align()
+
+		self.dense_feature_extraction = DenseFeatureExtractionModule(
+			finetune_feature_extraction=True,
+			use_cuda=use_cuda
+		)
+
+		self.detection = SoftDetectionModule()
+
+		if model_file is not None:
+			if use_cuda:
+				self.load_state_dict(torch.load(model_file)['model'])
+			else:
+				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
+
+
+	def display(self, img1, img2):
+		plt.figure()
+
+		im1 = imshow_image(
+			img1[0].cpu().numpy(),
+			preprocessing='caffe'
+		)
+
+		im2 = imshow_image(
+			img2[0].cpu().numpy(),
+			preprocessing='caffe'
+		)
+
+		plt.subplot(1, 2, 1)
+		plt.imshow(im1)
+		plt.axis('off')
+
+		plt.subplot(1, 2, 2)
+		plt.imshow(im2)
+		plt.axis('off')
+
+		plt.show()
+
+		exit(1)
+
+
+	def forward(self, batch):
+		b = batch['image1'].size(0)
+
+		img_warp1, img_warp2, H1, H2 = self.alignment(batch['image1'], batch['image2'])
+
+		dense_features = self.dense_feature_extraction(
+			torch.cat([img_warp1, img_warp2], dim=0)
+		)
+
+		# self.display(img_warp1, img_warp2)
+
+		# dense_features = self.dense_feature_extraction(
+		# 	torch.cat([batch['image1'], batch['image2']], dim=0)
+		# )
+
+		scores = self.detection(dense_features)
+
+		dense_features1 = dense_features[: b, :, :, :]
+		dense_features2 = dense_features[b :, :, :, :]
+
+		scores1 = scores[: b, :, :]
+		scores2 = scores[b :, :, :]
+
+		return {
+			'dense_features1': dense_features1,
+			'scores1': scores1,
+			'dense_features2': dense_features2,
+			'scores2': scores2,
+			'H1': H1,
+			'H2': H2
 		}

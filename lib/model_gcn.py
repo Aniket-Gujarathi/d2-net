@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 
 class DenseFeatureExtractionModule(nn.Module):
-	def __init__(self, finetune_feature_extraction=False, use_cuda=True):
+	def __init__(self, finetune_feature_extraction=False, use_cuda=False):
 		super(DenseFeatureExtractionModule, self).__init__()
 
 		model = models.vgg16()
@@ -74,10 +74,10 @@ class SoftDetectionModule(nn.Module):
 				self.soft_local_max_size, stride=1
 			)
 		)
-		local_max_score = exp / (sum_exp + 1e-5)
+		local_max_score = exp / (sum_exp)
 
 		depth_wise_max = torch.max(batch, dim=1)[0]
-		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1) + 1e-5)
+		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1))
 
 		all_scores = local_max_score * depth_wise_max_score
 		score = torch.max(all_scores, dim=1)[0]
@@ -172,7 +172,9 @@ class AttentionalGNN(nn.Module):
 		for layer, name in zip(self.layers, self.names):
 			if name == 'cross':
 				src0, src1 = desc1, desc0
+				#print('cross')
 			else:  # if name == 'self':
+				#print('self')
 				src0, src1 = desc0, desc1
 			delta0, delta1 = layer(desc0, src0), layer(desc1, src1)
 			desc0, desc1 = (desc0 + delta0), (desc1 + delta1)
@@ -185,7 +187,7 @@ class D2Net(nn.Module):
         'GNN_layers': ['self', 'cross'] * 9,
 	}
 
-	def __init__(self, config, model_file=None, use_cuda=True):
+	def __init__(self, config, model_file=None, use_cuda=False):
 		super(D2Net, self).__init__()
 
 		self.config = {**self.default_config, **config}
@@ -214,8 +216,8 @@ class D2Net(nn.Module):
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'], strict=False)
 
-		if use_cuda:
-			self.mod = self.mod.cuda()
+		#if use_cuda:
+		#	self.mod = self.mod.cuda()
 		#	print(self.mod, (3, 640, 480))
 
 
@@ -236,18 +238,21 @@ class D2Net(nn.Module):
 		#print(mdesc0.size())
 		dense_features = torch.cat([mdesc0, mdesc1], dim=0)
 
+		dense_features1 = dense_features[: b, :, :, :]
+		dense_features2 = dense_features[b :, :, :, :]
+
 		scores = self.detection(dense_features)
-		#print(desc0.size())
+		#print(mdesc0.size())
 		scores1 = scores[: b, :, :]
 		scores2 = scores[b :, :, :]
 
 
 
 		return {
-			#'dense_features1': dense_features1,
-			'dense_features1' : desc0,
+			'dense_features1': dense_features1,
+			#'dense_features1' : mdesc0,
 			'scores1': scores1,
-			#'dense_features2': dense_features2,
-			'dense_features2': desc1,
+			'dense_features2': dense_features2,
+			#'dense_features2': mdesc1,
 			'scores2': scores2
 		}

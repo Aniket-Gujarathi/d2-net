@@ -7,7 +7,6 @@ from sys import exit
 
 import torch
 import torch.nn.functional as F
-from torch import tensor
 
 from lib.utils import (
 	grid_positions,
@@ -17,8 +16,10 @@ from lib.utils import (
 	imshow_image
 )
 from lib.exceptions import NoGradientError, EmptyTensorError
+import torchgeometry as tgm
 
-matplotlib.use('Agg')
+
+# matplotlib.use('Agg')
 
 
 def loss_function(
@@ -54,6 +55,7 @@ def loss_function(
 		_, h2, w2 = dense_features2.size()
 		scores2 = output['scores2'][idx_in_batch]
 
+
 		all_descriptors1 = F.normalize(dense_features1.view(c, -1), dim=0)
 		descriptors1 = all_descriptors1
 
@@ -61,7 +63,11 @@ def loss_function(
 
 		# Warp the positions from image 1 to image 2
 		fmap_pos1 = grid_positions(h1, w1, device)
-		pos1 = upscale_positions(fmap_pos1, scaling_steps=scaling_steps)
+
+		hOrig, wOrig = int(batch['image1'].shape[2]/8), int(batch['image1'].shape[3]/8)
+		fmap_pos1Orig = grid_positions(hOrig, wOrig, device)
+		pos1 = upscale_positions(fmap_pos1Orig, scaling_steps=scaling_steps)
+
 		try:
 			pos1, pos2, ids = warp(
 				pos1,
@@ -70,28 +76,44 @@ def loss_function(
 			)
 		except EmptyTensorError:
 			continue
+
+		H1 = output['H1'][idx_in_batch]
+		H2 = output['H2'][idx_in_batch]
+
+		try:
+			pos1, pos2 = homoAlign(pos1, pos2, H1, H2, device)
+		except IndexError:
+			continue
+
+		ids = idsAlign(pos1, device)
+
+		img_warp1 = tgm.warp_perspective(batch['image1'].to(device), H1, dsize=(400, 400))
+		img_warp2 = tgm.warp_perspective(batch['image2'].to(device), H2, dsize=(400, 400))
+
+		# drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output)
+		# exit(1)
+
 		fmap_pos1 = fmap_pos1[:, ids]
 		descriptors1 = descriptors1[:, ids]
 		scores1 = scores1[ids]
 
 		# Skip the pair if not enough GT correspondences are available
-		# print("correspondences number: {}".format(ids.size(0)))
 		if ids.size(0) < 128:
-			# print("Less than 128 correspondences.")
 			continue
 
 		# Descriptors at the corresponding positions
 		fmap_pos2 = torch.round(
 			downscale_positions(pos2, scaling_steps=scaling_steps)
 		).long()
+
 		descriptors2 = F.normalize(
 			dense_features2[:, fmap_pos2[0, :], fmap_pos2[1, :]],
 			dim=0
 		)
-		#positive_distance = 2 - 2 * (
-		#	descriptors1.t().unsqueeze(1) @ descriptors2.t().unsqueeze(2)
-		#).squeeze()
-		positive_distance = torch.norm(descriptors1 - descriptors2, dim=0)
+
+		positive_distance = 2 - 2 * (
+			descriptors1.t().unsqueeze(1) @ descriptors2.t().unsqueeze(2)
+		).squeeze()
 
 		all_fmap_pos2 = grid_positions(h2, w2, device)
 		position_distance = torch.max(
@@ -102,19 +124,14 @@ def loss_function(
 			dim=0
 		)[0]
 		is_out_of_safe_radius = position_distance > safe_radius
-		#print(position_distance)
-		#distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
-		distance_matrix = torch.cdist(descriptors1.t().unsqueeze(0), all_descriptors2.t().unsqueeze(0), p=2).squeeze()
-		#print(descriptors1)
-		#print(descriptors2)
-		#negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
+		# negative_distance2 = torch.min(
+		# 	distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
+		# 	dim=1
+		# )[0]
 
-		negative_distance2 = torch.min(
-			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
-			dim=1
-		)[0]
-		print(negative_distance2)
-		print(distance_matrix)
+		negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
 			torch.abs(
@@ -124,114 +141,46 @@ def loss_function(
 			dim=0
 		)[0]
 		is_out_of_safe_radius = position_distance > safe_radius
-		#distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
-		distance_matrix = torch.cdist(descriptors2.t().unsqueeze(0), all_descriptors1.t().unsqueeze(0), p=2).squeeze()
-		#negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
+		# negative_distance1 = torch.min(
+		# 	distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
+		# 	dim=1
+		# )[0]
 
-
-		negative_distance1 = torch.min(
-			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
-			dim=1
-		)[0]
+		negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		diff = positive_distance - torch.min(
 			negative_distance1, negative_distance2
 		)
 
+		# if(batch['batch_idx']%20 == 0):
+		# 	print("positive_distance: {} | negative_distance: {}".format(positive_distance, torch.min(negative_distance1, negative_distance2)))
+
 		scores2 = scores2[fmap_pos2[0, :], fmap_pos2[1, :]]
 
 		loss = loss + (
 			torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
-			(torch.sum(scores1 * scores2))
+			(torch.sum(scores1 * scores2) )
 		)
 
 		has_grad = True
 		n_valid_samples += 1
 
-		log_correspond = 10
 		if plot and batch['batch_idx'] % batch['log_interval'] == 0:
-		# if plot and batch['batch_idx'] % log_correspond == 0:
-			pos1_aux = pos1.cpu().numpy()
-			pos2_aux = pos2.cpu().numpy()
-			k = pos1_aux.shape[1]
-			col = np.random.rand(k, 3)
-			n_sp = 4
-			plt.figure()
-			plt.subplot(1, n_sp, 1)
-			im1 = imshow_image(
-				batch['image1'][idx_in_batch].cpu().numpy(),
-				preprocessing=batch['preprocessing']
-			)
-			plt.imshow(im1)
-			plt.scatter(
-				pos1_aux[1, :], pos1_aux[0, :],
-				s=0.25**2, c=col, marker=',', alpha=0.5
-			)
-			plt.axis('off')
-			plt.subplot(1, n_sp, 2)
-			plt.imshow(
-				output['scores1'][idx_in_batch].data.cpu().numpy(),
-				cmap='Reds'
-			)
-			plt.axis('off')
-			plt.subplot(1, n_sp, 3)
-			im2 = imshow_image(
-				batch['image2'][idx_in_batch].cpu().numpy(),
-				preprocessing=batch['preprocessing']
-			)
-			plt.imshow(im2)
-			plt.scatter(
-				pos2_aux[1, :], pos2_aux[0, :],
-				s=0.25**2, c=col, marker=',', alpha=0.5
-			)
-			plt.axis('off')
-			plt.subplot(1, n_sp, 4)
-			plt.imshow(
-				output['scores2'][idx_in_batch].data.cpu().numpy(),
-				cmap='Reds'
-			)
-			plt.axis('off')
-			savefig('train_vis_semi/%s.%02d.%02d.%d.png' % (
-				'train' if batch['train'] else 'valid',
-				batch['epoch_idx'],
-				# batch['batch_idx'] // batch['log_interval'],
-				batch['batch_idx'] // log_correspond,
-				idx_in_batch
-			), dpi=300)
-			plt.close()
-
-			# Plotting correspondences
-
-			# im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
-			# im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2RGB)
-
-			# for i in range(0, pos1_aux.shape[1], 5):
-			# 	im1 = cv2.circle(im1, (pos1_aux[1, i], pos1_aux[0, i]), 1, (0, 0, 255), 2)
-			# for i in range(0, pos2_aux.shape[1], 5):
-			# 	im2 = cv2.circle(im2, (pos2_aux[1, i], pos2_aux[0, i]), 1, (0, 0, 255), 2)
-
-			# im3 = cv2.hconcat([im1, im2])
-
-			# for i in range(0, pos1_aux.shape[1], 5):
-			# 	im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 2)
-
-			# cv2.imwrite('train_vis/%s.%02d.%02d.%d.png' % (
-			# 	'train_corr' if batch['train'] else 'valid',
-			# 	batch['epoch_idx'],
-			# 	# batch['batch_idx'] // batch['log_interval'],
-			# 	batch['batch_idx'] // log_correspond,
-			# 	idx_in_batch
-			# ), im3)
+			# drawTraining(batch['image1'], batch['image2'], pos1, pos2, batch, idx_in_batch, output, save=True)
+			drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output, save=True)
 
 	if not has_grad:
 		raise NoGradientError
 
-	loss = loss / (n_valid_samples)
+	loss = loss / (n_valid_samples )
 
 	return loss
 
 
 def interpolate_depth(pos, depth):
+	# Depth filtering and interpolation of sparse depth
+
 	device = pos.device
 
 	ids = torch.arange(0, pos.size(1), device=device)
@@ -305,6 +254,7 @@ def interpolate_depth(pos, depth):
 	j_bottom_right = j_bottom_right[valid_depth]
 
 	ids = ids[valid_depth]
+
 	if ids.size(0) == 0:
 		raise EmptyTensorError
 
@@ -342,7 +292,6 @@ def warp(
 	device = pos1.device
 
 	Z1, pos1, ids = interpolate_depth(pos1, depth1)
-
 	# COLMAP convention
 	u1 = pos1[1, :] + bbox1[1] + .5
 	v1 = pos1[0, :] + bbox1[0] + .5
@@ -376,15 +325,147 @@ def warp(
 	inlier_mask = torch.abs(estimated_depth - annotated_depth) < 0.05
 
 	ids = ids[inlier_mask]
-	# print("ids size: ", ids.shape)
 	if ids.size(0) == 0:
-		# print("EmptyTensorError exception.")
 		raise EmptyTensorError
 
 	pos2 = pos2[:, inlier_mask]
 	pos1 = pos1[:, inlier_mask]
 
 	return pos1, pos2, ids
+
+
+def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=False):
+	pos1_aux = pos1.cpu().numpy()
+	pos2_aux = pos2.cpu().numpy()
+
+	k = pos1_aux.shape[1]
+	col = np.random.rand(k, 3)
+	n_sp = 4
+	plt.figure()
+	plt.subplot(1, n_sp, 1)
+	im1 = imshow_image(
+		image1[0].cpu().numpy(),
+		preprocessing=batch['preprocessing']
+	)
+	plt.imshow(im1)
+	plt.scatter(
+		pos1_aux[1, :], pos1_aux[0, :],
+		s=0.25**2, c=col, marker=',', alpha=0.5
+	)
+	plt.axis('off')
+	plt.subplot(1, n_sp, 2)
+	plt.imshow(
+		output['scores1'][idx_in_batch].data.cpu().numpy(),
+		cmap='Reds'
+	)
+	plt.axis('off')
+	plt.subplot(1, n_sp, 3)
+	im2 = imshow_image(
+		image2[0].cpu().numpy(),
+		preprocessing=batch['preprocessing']
+	)
+	plt.imshow(im2)
+	plt.scatter(
+		pos2_aux[1, :], pos2_aux[0, :],
+		s=0.25**2, c=col, marker=',', alpha=0.5
+	)
+	plt.axis('off')
+	plt.subplot(1, n_sp, 4)
+	plt.imshow(
+		output['scores2'][idx_in_batch].data.cpu().numpy(),
+		cmap='Reds'
+	)
+	plt.axis('off')
+
+	if(save == True):
+		savefig('train_vis_semi/%s.%02d.%02d.%d.png' % (
+			'train' if batch['train'] else 'valid',
+			batch['epoch_idx'],
+			batch['batch_idx'] // batch['log_interval'],
+			idx_in_batch
+		), dpi=300)
+	else:
+		plt.show()
+
+	plt.close()
+
+	im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
+	im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2RGB)
+
+	for i in range(0, pos1_aux.shape[1], 100):
+		im1 = cv2.circle(im1, (pos1_aux[1, i], pos1_aux[0, i]), 1, (0, 0, 255), 2)
+	for i in range(0, pos2_aux.shape[1], 100):
+		im2 = cv2.circle(im2, (pos2_aux[1, i], pos2_aux[0, i]), 1, (0, 0, 255), 2)
+
+	im3 = cv2.hconcat([im1, im2])
+
+	for i in range(0, pos1_aux.shape[1], 100):
+		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
+
+	if(save == True):
+		cv2.imwrite('train_vis/%s.%02d.%02d.%d.png' % (
+			'train_corr' if batch['train'] else 'valid',
+			batch['epoch_idx'],
+			batch['batch_idx'] // batch['log_interval'],
+			idx_in_batch
+		), im3)
+	else:
+		cv2.imshow('Image', im3)
+		cv2.waitKey(0)
+
+
+def homoAlign(pos1, pos2, H1, H2, device):
+	ones = torch.ones(pos1.shape[1]).reshape(1, pos1.shape[1]).to(device)
+
+	pos1[[0, 1]] = pos1[[1, 0]]
+	pos2[[0, 1]] = pos2[[1, 0]]
+
+	pos1Homo = torch.cat((pos1, ones), dim=0)
+	pos2Homo = torch.cat((pos2, ones), dim=0)
+
+	pos1Warp = H1 @ pos1Homo
+	pos2Warp = H2 @ pos2Homo
+
+	pos1Warp = pos1Warp/pos1Warp[2, :]
+	pos1Warp = pos1Warp[0:2, :]
+
+	pos2Warp = pos2Warp/pos2Warp[2, :]
+	pos2Warp = pos2Warp[0:2, :]
+
+	pos1Warp[[0, 1]] = pos1Warp[[1, 0]]
+	pos2Warp[[0, 1]] = pos2Warp[[1, 0]]
+
+	pos1Pov = []
+	pos2Pov = []
+
+	for i in range(pos1.shape[1]):
+		if(380 > pos1Warp[0, i] > 0 and 380 > pos1Warp[1, i] > 0 and 380 > pos2Warp[0, i] > 0 and 380 > pos2Warp[1, i] > 0):
+			pos1Pov.append((pos1Warp[0, i], pos1Warp[1, i]))
+			pos2Pov.append((pos2Warp[0, i], pos2Warp[1, i]))
+
+	pos1Pov = torch.Tensor(pos1Pov).to(device)
+	pos2Pov = torch.Tensor(pos2Pov).to(device)
+
+	pos1Pov = torch.transpose(pos1Pov, 0, 1)
+	pos2Pov = torch.transpose(pos2Pov, 0, 1)
+
+	return pos1Pov, pos2Pov
+
+
+def idsAlign(pos1, device):
+	row = pos1[0, :]/8
+	col = pos1[1, :]/8
+
+	ids = []
+
+	for i in range(row.shape[0]):
+		index = (50 * row[i]) + col[i]
+		ids.append(index)
+
+	ids = torch.Tensor(ids).long()
+
+	return ids
+
 
 def semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin):
 	negative_distances = distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.

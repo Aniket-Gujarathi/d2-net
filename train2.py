@@ -26,8 +26,8 @@ from lib.model import D2Net
 
 # CUDA
 use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0")
-# if use_cuda else "cpu"
+device = torch.device("cuda:0" if use_cuda else "cpu")
+
 # Seed
 torch.manual_seed(1)
 if use_cuda:
@@ -123,7 +123,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_gcn'
+	plot_path = 'train_vis_semi'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -133,7 +133,7 @@ if args.plot:
 model = D2Net(
 	#config = {},
 	model_file=args.model_file,
-	use_cuda=use_cuda
+	use_cuda=use_cuda,
 )
 
 # Optimizer
