@@ -56,7 +56,7 @@ class SoftDetectionModule(nn.Module):
 
 	def forward(self, batch):
 		b = batch.size(0)
-
+		#print(b)
 		batch = F.relu(batch)
 
 		max_per_sample = torch.max(batch.view(b, -1), dim=1)[0]
@@ -74,10 +74,11 @@ class SoftDetectionModule(nn.Module):
 		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1))
 
 		all_scores = local_max_score * depth_wise_max_score
+
 		score = torch.max(all_scores, dim=1)[0]
 
 		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1) + 1e-5)
-
+		#print(score)
 		return score
 
 
@@ -94,7 +95,7 @@ class D2Net(nn.Module):
 
 		if model_file is not None:
 			if use_cuda:
-				self.load_state_dict(torch.load(model_file)['model'], strict=False)
+				self.load_state_dict(torch.load(model_file)['model'])
 			else:
 				self.load_state_dict(torch.load(model_file, map_location='cpu')['model'])
 
@@ -109,6 +110,7 @@ class D2Net(nn.Module):
 
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
+
 
 		scores1 = scores[: b, :, :]
 		scores2 = scores[b :, :, :]

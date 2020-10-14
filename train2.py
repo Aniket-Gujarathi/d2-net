@@ -17,7 +17,7 @@ from tqdm import tqdm
 import warnings
 
 # from lib.dataset import MegaDepthDataset
-from lib.dataset2 import LabDataset
+#from lib.dataset2 import LabDataset
 from lib.datasetGazebo import GazeboDataset
 from lib.exceptions import NoGradientError
 from lib.loss2 import loss_function
@@ -123,7 +123,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_semi'
+	plot_path = 'train_vis_synthetic'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -164,13 +164,16 @@ if args.use_validation:
 #     preprocessing=args.preprocessing
 # )
 
-# training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+#training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
 training_dataset = GazeboDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+
+training_dataset.build_dataset()
 
 training_dataloader = DataLoader(
 	training_dataset,
 	batch_size=args.batch_size,
-	num_workers=args.num_workers
+	num_workers=args.num_workers,
+	shuffle=True
 )
 
 
