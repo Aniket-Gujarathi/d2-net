@@ -138,7 +138,7 @@ def	drawMatches(file1, file2, feat1, feat2):
 	model, inliers = ransac(
 		(keypoints_left, keypoints_right),
 		ProjectiveTransform, min_samples=4,
-		residual_threshold=4, max_trials=10000
+		residual_threshold=15, max_trials=1000
 	)
 	n_inliers = np.sum(inliers)
 	print('Number of inliers: %d.' % n_inliers)
@@ -169,7 +169,7 @@ def	drawMatches2(file1, file2, feat1, feat2):
 	for i in range(keypoints_right.shape[1]):
 		image2 = cv2.circle(image2, (int(keypoints_right[0, i]), int(keypoints_right[1, i])), 2, (0, 0, 255), 4)
 
-	im4 = cv2.hconcat([image1, image2])	
+	im4 = cv2.hconcat([image1, image2])
 
 	for i in range(keypoints_left.shape[1]):
 		im4 = cv2.line(im4, (int(keypoints_left[0, i]), int(keypoints_left[1, i])), (int(keypoints_right[0, i]) +  image1.shape[1], int(keypoints_right[1, i])), (0, 255, 0), 1)
@@ -193,6 +193,6 @@ if __name__ == '__main__':
 	feat2 = extract(args.imgs[1], args, model, device)
 	print("Features extracted.")
 
-	# drawMatches(args.imgs[0], args.imgs[1], feat1, feat2)
+	drawMatches(args.imgs[0], args.imgs[1], feat1, feat2)
 
-	drawMatches2(args.imgs[0], args.imgs[1], feat1, feat2)
+	#drawMatches2(args.imgs[0], args.imgs[1], feat1, feat2)

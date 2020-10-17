@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
-
+from torchsummary import summary
 
 class DenseFeatureExtractionModule(nn.Module):
 	def __init__(self, finetune_feature_extraction=False, use_cuda=True):
@@ -32,7 +32,7 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		# Fix forward parameters
 		for param in self.model.parameters():
-			param.requires_grad = True
+			param.requires_grad = False
 		if finetune_feature_extraction:
 			# Unlock conv4_3
 			for param in list(self.model.parameters())[-2 :]:
@@ -40,6 +40,7 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		if use_cuda:
 			self.model = self.model.cuda()
+			print(summary(self.model, (3, 640, 480)))
 
 	def forward(self, batch):
 		output = self.model(batch)
@@ -68,7 +69,7 @@ class SoftDetectionModule(nn.Module):
 				self.soft_local_max_size, stride=1
 			)
 		)
-		local_max_score = exp / (sum_exp )
+		local_max_score = exp / sum_exp
 
 		depth_wise_max = torch.max(batch, dim=1)[0]
 		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1))
@@ -77,7 +78,7 @@ class SoftDetectionModule(nn.Module):
 
 		score = torch.max(all_scores, dim=1)[0]
 
-		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1) + 1e-5)
+		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1))
 		#print(score)
 		return score
 

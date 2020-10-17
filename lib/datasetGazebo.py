@@ -7,6 +7,9 @@ import csv
 import torch
 from torch.utils.data import Dataset
 from lib.utils import preprocess_image
+import time
+import cv2
+
 
 
 class GazeboDataset(Dataset):
@@ -16,11 +19,11 @@ class GazeboDataset(Dataset):
 		self.poses = poses
 		self.intrinsics = intrinsics
 		self.preprocessing = preprocessing
-		
+
 
 	def getImageFiles(self):
 		imgFiles = []
-		
+
 		with open(self.imgPairs) as csvFile:
 			csvReader = csv.reader(csvFile, delimiter=',')
 
@@ -29,7 +32,7 @@ class GazeboDataset(Dataset):
 					continue
 				else:
 					imgFiles.append(row)
-
+				#print(imgFiles)
 		return imgFiles
 
 
@@ -60,7 +63,7 @@ class GazeboDataset(Dataset):
 
 		for i in range(len(imgFiles)):
 			rgbFile1, depthFile1, rgbFile2, depthFile2 = imgFiles[i]
-			
+
 			rgbFile1 = os.path.join(self.rootDir, rgbFile1)
 			depthFile1 = os.path.join(self.rootDir, depthFile1)
 			rgbFile2 = os.path.join(self.rootDir, rgbFile2)
@@ -71,14 +74,14 @@ class GazeboDataset(Dataset):
 			# depth1 = Image.open(depthFile1)
 			rgb2 = Image.open(rgbFile2)
 			depth2 = np.load(depthFile2)
-			# depth2 = Image.open(depthFile2)			
+			# depth2 = Image.open(depthFile2)
 
 			# if(depth1.mode != "I" or depth2.mode != "I"):
 			# 	raise Exception("Depth image is not in intensity format")
-			
+
 			if(rgb1.mode != 'RGB'):
 				rgb1 = rgb1.convert('RGB')
-			
+
 			if(rgb2.mode != 'RGB'):
 				rgb2 = rgb2.convert('RGB')
 
@@ -130,7 +133,7 @@ class GazeboDataset(Dataset):
 			'bbox2': torch.from_numpy(bbox2.astype(np.float32))
 		}
 
-	 
+
 if __name__ == '__main__':
 	# rootDir = "/scratch/udit/"
 
@@ -141,4 +144,4 @@ if __name__ == '__main__':
 
 	training_dataset = GazeboDataset(rootDir, imgPairs, poses, intrinsics, 'caffe')
 
-	training_dataset.build_dataset()
+	#training_dataset.build_dataset()

@@ -123,7 +123,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_synthetic'
+	plot_path = 'train_vis_trial'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -140,7 +140,7 @@ model = D2Net(
 optimizer = optim.Adam(
 	filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr
 )
-
+#scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.65)
 # Dataset
 if args.use_validation:
 	validation_dataset = MegaDepthDataset(
@@ -226,6 +226,9 @@ def process_epoch(
 	))
 	log_file.flush()
 
+	#print(scheduler.get_last_lr()[0])
+	#scheduler.step()
+
 	return np.mean(epoch_losses)
 
 
@@ -256,7 +259,8 @@ if args.use_validation:
 # Start the training
 for epoch_idx in range(1, args.num_epochs + 1):
 	# Process epoch
-	training_dataset.build_dataset()
+	#training_dataset.build_dataset()
+
 	train_loss_history.append(
 		process_epoch(
 			epoch_idx,

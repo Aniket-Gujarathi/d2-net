@@ -78,7 +78,7 @@ class MegaDepthDataset(Dataset):
 				),
 				scale_ratio_matrix <= self.max_scale_ratio
 			)
-			
+
 			pairs = np.vstack(np.where(valid))
 			try:
 				selected_ids = np.random.choice(
@@ -86,14 +86,14 @@ class MegaDepthDataset(Dataset):
 				)
 			except:
 				continue
-			
+
 			image_paths = scene_info['image_paths']
 			depth_paths = scene_info['depth_paths']
 			points3D_id_to_2D = scene_info['points3D_id_to_2D']
 			points3D_id_to_ndepth = scene_info['points3D_id_to_ndepth']
 			intrinsics = scene_info['intrinsics']
 			poses = scene_info['poses']
-			
+
 			for pair_idx in selected_ids:
 				idx1 = pairs[0, pair_idx]
 				idx2 = pairs[1, pair_idx]
@@ -107,7 +107,7 @@ class MegaDepthDataset(Dataset):
 				matches_nd2 = np.array([points3D_id_to_ndepth[idx2][match] for match in matches])
 				scale_ratio = np.maximum(matches_nd1 / matches_nd2, matches_nd2 / matches_nd1)
 				matches = matches[np.where(scale_ratio <= self.max_scale_ratio)[0]]
-				
+
 				point3D_id = np.random.choice(matches)
 				point2D1 = points3D_id_to_2D[idx1][point3D_id]
 				point2D2 = points3D_id_to_2D[idx2][point3D_id]

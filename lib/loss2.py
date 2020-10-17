@@ -115,7 +115,8 @@ def loss_function(
 			dim=1
 		)[0]
 		#print(positive_distance[0])
-		#print(descriptors2)
+		#print('descriptors2 ', descriptors2)
+		#print('descriptors1 ', descriptors1)
 		#print(distance_matrix)
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
@@ -141,7 +142,8 @@ def loss_function(
 		)
 
 		scores2 = scores2[fmap_pos2[0, :], fmap_pos2[1, :]]
-		#print('scores2', scores2)
+
+		print('scores2', scores2)
 		print('scores1', scores1)
 
 		loss = loss + (
@@ -195,7 +197,7 @@ def loss_function(
 				cmap='Reds'
 			)
 			plt.axis('off')
-			savefig('train_vis_synthetic/%s.%02d.%02d.%d.png' % (
+			savefig('train_vis_trial/%s.%02d.%02d.%d.png' % (
 				'train' if batch['train'] else 'valid',
 				batch['epoch_idx'],
 				# batch['batch_idx'] // batch['log_interval'],
@@ -219,7 +221,7 @@ def loss_function(
 			for i in range(0, pos1_aux.shape[1], 5):
 				im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 2)
 
-			cv2.imwrite('train_vis_synthetic/%s.%02d.%02d.%d.png' % (
+			cv2.imwrite('train_vis_trial/%s.%02d.%02d.%d.png' % (
 				'train_corr' if batch['train'] else 'valid',
 				batch['epoch_idx'],
 				batch['batch_idx'] // batch['log_interval'],
