@@ -147,6 +147,8 @@ class MegaDepthDataset(Dataset):
 			self.base_path, pair_metadata['image_path1']
 		)
 		image1 = Image.open(image_path1)
+		#cv.imshow(image1)
+		#print('here')
 		if image1.mode != 'RGB':
 			image1 = image1.convert('RGB')
 		image1 = np.array(image1)

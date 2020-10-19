@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import torchvision.models as models
 import torchgeometry as tgm
-
+import kornia
 import matplotlib.pyplot as plt
 from lib.utils import imshow_image
 from sys import exit
@@ -95,7 +95,7 @@ class Align(nn.Module):
 
 		points_src = torch.FloatTensor([[
 			[190,210],[455,210],[633,475],[0,475],
-		]]).cuda()	
+		]]).cuda()
 		points_dst = torch.FloatTensor([[
 			[0, 0], [399, 0], [399, 399], [0, 399],
 		]]).cuda()
@@ -110,7 +110,8 @@ class Align(nn.Module):
 		flipH = tgm.get_perspective_transform(points_src, points_dst)
 
 		self.H1 = cropH
-		self.H2 = flipH @ cropH
+		# self.H2 = flipH @ cropH
+		self.H2 = cropH
 
 
 	def forward(self, img1, img2):
@@ -118,12 +119,12 @@ class Align(nn.Module):
 		img_warp2 = tgm.warp_perspective(img2, self.H2, dsize=(400, 400))
 
 		return img_warp1, img_warp2, self.H1, self.H2
-		
+
 
 class D2Net(nn.Module):
 	def __init__(self, model_file=None, use_cuda=True):
 		super(D2Net, self).__init__()
-		
+
 		self.dense_feature_extraction = DenseFeatureExtractionModule(
 			finetune_feature_extraction=True,
 			use_cuda=use_cuda
@@ -163,7 +164,7 @@ class D2Net(nn.Module):
 class D2NetAlign(nn.Module):
 	def __init__(self, model_file=None, use_cuda=True):
 		super(D2NetAlign, self).__init__()
-		
+
 		self.alignment = Align()
 
 		self.dense_feature_extraction = DenseFeatureExtractionModule(
@@ -208,7 +209,7 @@ class D2NetAlign(nn.Module):
 
 	def forward(self, batch):
 		b = batch['image1'].size(0)
-		
+
 		img_warp1, img_warp2, H1, H2 = self.alignment(batch['image1'], batch['image2'])
 
 		dense_features = self.dense_feature_extraction(
@@ -235,5 +236,5 @@ class D2NetAlign(nn.Module):
 			'dense_features2': dense_features2,
 			'scores2': scores2,
 			'H1': H1,
-			'H2': H2 
+			'H2': H2
 		}

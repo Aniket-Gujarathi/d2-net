@@ -17,11 +17,11 @@ from tqdm import tqdm
 import warnings
 
 # from lib.dataset import MegaDepthDataset
-#from lib.dataset2 import LabDataset
-from lib.datasetGazebo import GazeboDataset
+from lib.dataset2 import LabDataset
+#from lib.datasetGazebo import GazeboDataset
 from lib.exceptions import NoGradientError
-from lib.loss2 import loss_function
-from lib.model import D2Net
+from lib.loss3 import loss_function
+from lib.model2 import D2NetAlign
 
 
 # CUDA
@@ -130,7 +130,7 @@ if args.plot:
 		os.mkdir(plot_path)
 
 # Creating CNN model
-model = D2Net(
+model = D2NetAlign(
 	#config = {},
 	model_file=args.model_file,
 	use_cuda=use_cuda,
@@ -164,8 +164,8 @@ if args.use_validation:
 #     preprocessing=args.preprocessing
 # )
 
-#training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
-training_dataset = GazeboDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+#training_dataset = GazeboDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
 
 training_dataset.build_dataset()
 
