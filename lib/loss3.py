@@ -76,8 +76,8 @@ def loss_function(
 			)
 		except EmptyTensorError:
 			continue
-		
-		H1 = output['H1'][idx_in_batch] 
+
+		H1 = output['H1'][idx_in_batch]
 		H2 = output['H2'][idx_in_batch]
 
 		try:
@@ -104,12 +104,12 @@ def loss_function(
 		fmap_pos2 = torch.round(
 			downscale_positions(pos2, scaling_steps=scaling_steps)
 		).long()
-	
+
 		descriptors2 = F.normalize(
 			dense_features2[:, fmap_pos2[0, :], fmap_pos2[1, :]],
 			dim=0
 		)
-	
+
 		positive_distance = 2 - 2 * (
 			descriptors1.t().unsqueeze(1) @ descriptors2.t().unsqueeze(2)
 		).squeeze()
@@ -125,7 +125,7 @@ def loss_function(
 			dim=0
 		)[0]
 		is_out_of_safe_radius = position_distance > safe_radius
-		
+
 		distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
 		# distance_matrix = getDistanceMatrix(descriptors1, all_descriptors2)
 
@@ -133,9 +133,9 @@ def loss_function(
 			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
 			dim=1
 		)[0]
-		
+
 		# negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
-		
+
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
 			torch.abs(
@@ -145,10 +145,10 @@ def loss_function(
 			dim=0
 		)[0]
 		is_out_of_safe_radius = position_distance > safe_radius
-		
+
 		distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
 		# distance_matrix = getDistanceMatrix(descriptors2, all_descriptors1)
-		
+
 		negative_distance1 = torch.min(
 			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
 			dim=1
@@ -176,7 +176,8 @@ def loss_function(
 
 	if not has_grad:
 		raise NoGradientError
-
+	print('scores1', scores1)
+	print('scores2', scores2)	
 	loss = loss / (n_valid_samples )
 
 	return loss
@@ -382,7 +383,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	plt.axis('off')
 
 	if(save == True):
-		savefig('train_vis/%s.%02d.%02d.%d.png' % (
+		savefig('train_vis_top_500/%s.%02d.%02d.%d.png' % (
 			'train' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -390,7 +391,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 		), dpi=300)
 	else:
 		plt.show()
-	
+
 	plt.close()
 
 	im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
@@ -407,7 +408,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
 
 	if(save == True):
-		cv2.imwrite('train_vis/%s.%02d.%02d.%d.png' % (
+		cv2.imwrite('train_vis_top_500/%s.%02d.%02d.%d.png' % (
 			'train_corr' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -473,20 +474,20 @@ def idsAlign(pos1, device):
 
 def semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin):
 	negative_distances = distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.
-	
+
 	negDist = []
 
 	for i, row in enumerate(negative_distances):
 		posDist = positive_distance[i]
-		
+
 		row = row[(posDist + margin > row) & (row > posDist)]
-		
+
 		if(row.size(0) == 0):
 			negDist.append(negative_distances[i, 0])
 		else:
 			perm = torch.randperm(row.size(0))
 			negDist.append(row[perm[0]])
-		
+
 	negDist = torch.Tensor(negDist).to(positive_distance.device)
 
 	return negDist

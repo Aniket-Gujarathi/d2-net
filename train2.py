@@ -12,13 +12,15 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
+from torch.utils.tensorboard import SummaryWriter
+
 from tqdm import tqdm
 
 import warnings
 
 # from lib.dataset import MegaDepthDataset
-from lib.dataset2 import LabDataset
-#from lib.datasetGazebo import GazeboDataset
+#from lib.dataset2 import LabDataset
+from lib.datasetGazebo import GazeboDataset
 from lib.exceptions import NoGradientError
 from lib.loss3 import loss_function
 from lib.model2 import D2NetAlign
@@ -27,6 +29,9 @@ from lib.model2 import D2NetAlign
 # CUDA
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
+
+# tensorboard summary writer
+writer = SummaryWriter()
 
 # Seed
 torch.manual_seed(1)
@@ -123,7 +128,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_trial'
+	plot_path = 'train_vis_top_500'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -164,8 +169,8 @@ if args.use_validation:
 #     preprocessing=args.preprocessing
 # )
 
-training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
-#training_dataset = GazeboDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+#training_dataset = LabDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
+training_dataset = GazeboDataset(args.dataset_path, args.imgPairs, args.poses, args.K, args.preprocessing)
 
 training_dataset.build_dataset()
 
@@ -224,8 +229,11 @@ def process_epoch(
 		epoch_idx,
 		np.mean(epoch_losses)
 	))
-	log_file.flush()
 
+	writer.add_scalar("Loss/train", np.mean(epoch_losses), epoch_idx)
+
+	log_file.flush()
+	writer.flush()
 	#print(scheduler.get_last_lr()[0])
 	#scheduler.step()
 

@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
-import torchgeometry as tgm
-import kornia
+import kornia.geometry.transform as tgm
+
 import matplotlib.pyplot as plt
 from lib.utils import imshow_image
 from sys import exit
