@@ -11,6 +11,8 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 
+from torch.utils.tensorboard import SummaryWriter
+
 from tqdm import tqdm
 
 import warnings
@@ -24,6 +26,9 @@ from lib.model import D2Net
 # CUDA
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
+
+# Tensorboard writer
+writer = SummaryWriter()
 
 # Seed
 torch.manual_seed(1)
@@ -48,7 +53,7 @@ parser.add_argument(
 	help='image preprocessing (caffe or torch)'
 )
 parser.add_argument(
-	'--model_file', type=str, default='models/d2_ots.pth',
+	'--model_file', type=str, default='models/d2_tf.pth',
 	help='path to the full model'
 )
 
@@ -106,7 +111,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis'
+	plot_path = 'train_vis_500_tf'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -126,12 +131,12 @@ optimizer = optim.Adam(
 # Dataset
 if args.use_validation:
 	validation_dataset = MegaDepthDataset(
-		scene_list_path='megadepth_utils/valid_scenes.txt',
+		#scene_list_path='megadepth_utils/valid_scenes.txt',
 		scene_info_path=args.scene_info_path,
 		base_path=args.dataset_path,
 		train=False,
 		preprocessing=args.preprocessing,
-		pairs_per_scene=25
+		pairs_per_scene=100
 	)
 	validation_dataloader = DataLoader(
 		validation_dataset,
@@ -140,7 +145,7 @@ if args.use_validation:
 	)
 
 training_dataset = MegaDepthDataset(
-	scene_list_path='megadepth_utils/train_scenes.txt',
+	#scene_list_path='megadepth_utils/train_scenes.txt',
 	scene_info_path=args.scene_info_path,
 	base_path=args.dataset_path,
 	preprocessing=args.preprocessing
@@ -199,7 +204,11 @@ def process_epoch(
 		epoch_idx,
 		np.mean(epoch_losses)
 	))
+
+	writer.add_scalar("Loss/train", np.mean(epoch_losses), epoch_idx)
+
 	log_file.flush()
+	writer.flush()
 
 	return np.mean(epoch_losses)
 
@@ -209,7 +218,7 @@ if os.path.isdir(args.checkpoint_directory):
 	print('[Warning] Checkpoint directory already exists.')
 else:
 	os.mkdir(args.checkpoint_directory)
-	
+
 
 # Open the log file for writing
 if os.path.exists(args.log_file):
