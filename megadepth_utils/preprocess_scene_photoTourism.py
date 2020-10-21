@@ -24,7 +24,13 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-#base_path = args.base_path
+base_path = args.base_path
+
+if not os.path.exists(base_path):
+    print('base_path not present')
+    exit()
+
+
 # Remove the trailing / if need be.
 if base_path[-1] in ['/', '\\']:
     base_path = base_path[: - 1]
@@ -33,6 +39,11 @@ if base_path[-1] in ['/', '\\']:
 base_depth_path = os.path.join(
     base_path, 'stereo'
 )
+
+if not os.path.exists(base_path):
+    print('base_depth_path not present')
+    exit()
+
 #base_undistorted_sfm_path = os.path.join(
 #    base_path, 'Undistorted_SfM'
 #)
@@ -40,25 +51,34 @@ base_depth_path = os.path.join(
 undistorted_sparse_path = os.path.join(
     base_path, 'sparse'
 )
+
+if not os.path.exists(base_path):
+    print('sparse_path not present')
+    exit()
+
 #if not os.path.exists(undistorted_sparse_path):
 #    exit()
 
 depths_path = os.path.join(
     base_depth_path, 'depth_maps_clean_300_th_0.10'
 )
+#print(depths_path)
 if not os.path.exists(depths_path):
+    print('depth_path not present')
     exit()
 
 images_path = os.path.join(
     base_path, 'images'
 )
+
 if not os.path.exists(images_path):
+    print('image_path not present')
     exit()
 
 # Process cameras.txt
 with open(os.path.join(undistorted_sparse_path, 'cameras.txt'), 'r') as f:
     raw = f.readlines()[3 :]  # skip the header
-
+print('cameras_opened')
 camera_intrinsics = {}
 for camera in raw:
     camera = camera.split(' ')
@@ -67,7 +87,7 @@ for camera in raw:
 # Process points3D.txt
 with open(os.path.join(undistorted_sparse_path, 'points3D.txt'), 'r') as f:
     raw = f.readlines()[3 :]  # skip the header
-
+print('points opened')
 points3D = {}
 for point3D in raw:
     point3D = point3D.split(' ')
@@ -78,7 +98,7 @@ for point3D in raw:
 # Process images.txt
 with open(os.path.join(undistorted_sparse_path, 'images.txt'), 'r') as f:
     raw = f.readlines()[4 :]  # skip the header
-
+print('images opened')
 image_id_to_idx = {}
 image_names = []
 raw_pose = []
@@ -191,6 +211,7 @@ for idx, image_name in enumerate(image_names):
         p3d = points3D[point3D_id]
         current_points3D_id_to_ndepth[point3D_id] = (np.dot(R[2, :], p3d) + t[2]) / (.5 * (K[0, 0] + K[1, 1]))
     points3D_id_to_ndepth.append(current_points3D_id_to_ndepth)
+print('completed camera config')
 principal_axis = np.array(principal_axis)
 angles = np.rad2deg(np.arccos(
     np.clip(
@@ -226,9 +247,9 @@ for idx1 in range(n_images):
         min_scale_ratio = np.min(np.maximum(nd1 / nd2, nd2 / nd1))
         scale_ratio_matrix[idx1, idx2] = min_scale_ratio
         scale_ratio_matrix[idx2, idx1] = min_scale_ratio
-
+print('completed overlap')
 np.savez(
-    os.path.join(args.output_path, '%s.npz'),
+    os.path.join(args.output_path, '%s.npz' % 'brandenburg_gate'),
     image_paths=image_paths,
     depth_paths=depth_paths,
     intrinsics=intrinsics,

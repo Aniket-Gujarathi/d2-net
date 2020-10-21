@@ -19,7 +19,7 @@ from lib.utils import preprocess_image
 class MegaDepthDataset(Dataset):
 	def __init__(
 			self,
-			scene_list_path='megadepth_utils/train_scenes.txt',
+			#scene_list_path='megadepth_utils/train_scenes.txt',
 			scene_info_path='/local/dataset/megadepth/scene_info',
 			base_path='/local/dataset/megadepth',
 			train=True,
@@ -27,14 +27,14 @@ class MegaDepthDataset(Dataset):
 			min_overlap_ratio=.5,
 			max_overlap_ratio=1,
 			max_scale_ratio=np.inf,
-			pairs_per_scene=100,
+			pairs_per_scene=500,
 			image_size=256
 	):
-		self.scenes = []
-		with open(scene_list_path, 'r') as f:
-			lines = f.readlines()
-			for line in lines:
-				self.scenes.append(line.strip('\n'))
+		#self.scenes = []
+		#with open(scene_list_path, 'r') as f:
+		#	lines = f.readlines()
+		#	for line in lines:
+		#		self.scenes.append(line.strip('\n'))
 
 		self.scene_info_path = scene_info_path
 		self.base_path = base_path
@@ -61,74 +61,75 @@ class MegaDepthDataset(Dataset):
 			print('Building the validation dataset...')
 		else:
 			print('Building a new training dataset...')
-		for scene in tqdm(self.scenes, total=len(self.scenes)):
-			scene_info_path = os.path.join(
-				self.scene_info_path, '%s.npz' % scene
+		#for scene in tqdm(self.scenes, total=len(self.scenes)):
+		scene_info_path = os.path.join(
+			self.scene_info_path, '%s.npz' % 'brandenburg_gate'
+		)
+		#if not os.path.exists(scene_info_path):
+		#	continue
+		scene_info = np.load(scene_info_path, allow_pickle=True)
+		overlap_matrix = scene_info['overlap_matrix']
+		scale_ratio_matrix = scene_info['scale_ratio_matrix']
+
+		valid =  np.logical_and(
+			np.logical_and(
+				overlap_matrix >= self.min_overlap_ratio,
+				overlap_matrix <= self.max_overlap_ratio
+			),
+			scale_ratio_matrix <= self.max_scale_ratio
+		)
+
+		pairs = np.vstack(np.where(valid))
+		try:
+			selected_ids = np.random.choice(
+				pairs.shape[1], self.pairs_per_scene
 			)
-			if not os.path.exists(scene_info_path):
-				continue
-			scene_info = np.load(scene_info_path, allow_pickle=True)
-			overlap_matrix = scene_info['overlap_matrix']
-			scale_ratio_matrix = scene_info['scale_ratio_matrix']
+		except:
+			print('sry')
+			#continue
 
-			valid =  np.logical_and(
-				np.logical_and(
-					overlap_matrix >= self.min_overlap_ratio,
-					overlap_matrix <= self.max_overlap_ratio
-				),
-				scale_ratio_matrix <= self.max_scale_ratio
-			)
+		image_paths = scene_info['image_paths']
+		depth_paths = scene_info['depth_paths']
+		points3D_id_to_2D = scene_info['points3D_id_to_2D']
+		points3D_id_to_ndepth = scene_info['points3D_id_to_ndepth']
+		intrinsics = scene_info['intrinsics']
+		poses = scene_info['poses']
 
-			pairs = np.vstack(np.where(valid))
-			try:
-				selected_ids = np.random.choice(
-					pairs.shape[1], self.pairs_per_scene
-				)
-			except:
-				continue
+		for pair_idx in selected_ids:
+			idx1 = pairs[0, pair_idx]
+			idx2 = pairs[1, pair_idx]
+			matches = np.array(list(
+				points3D_id_to_2D[idx1].keys() &
+				points3D_id_to_2D[idx2].keys()
+			))
 
-			image_paths = scene_info['image_paths']
-			depth_paths = scene_info['depth_paths']
-			points3D_id_to_2D = scene_info['points3D_id_to_2D']
-			points3D_id_to_ndepth = scene_info['points3D_id_to_ndepth']
-			intrinsics = scene_info['intrinsics']
-			poses = scene_info['poses']
+			# Scale filtering
+			matches_nd1 = np.array([points3D_id_to_ndepth[idx1][match] for match in matches])
+			matches_nd2 = np.array([points3D_id_to_ndepth[idx2][match] for match in matches])
+			scale_ratio = np.maximum(matches_nd1 / matches_nd2, matches_nd2 / matches_nd1)
+			matches = matches[np.where(scale_ratio <= self.max_scale_ratio)[0]]
 
-			for pair_idx in selected_ids:
-				idx1 = pairs[0, pair_idx]
-				idx2 = pairs[1, pair_idx]
-				matches = np.array(list(
-					points3D_id_to_2D[idx1].keys() &
-					points3D_id_to_2D[idx2].keys()
-				))
-
-				# Scale filtering
-				matches_nd1 = np.array([points3D_id_to_ndepth[idx1][match] for match in matches])
-				matches_nd2 = np.array([points3D_id_to_ndepth[idx2][match] for match in matches])
-				scale_ratio = np.maximum(matches_nd1 / matches_nd2, matches_nd2 / matches_nd1)
-				matches = matches[np.where(scale_ratio <= self.max_scale_ratio)[0]]
-
-				point3D_id = np.random.choice(matches)
-				point2D1 = points3D_id_to_2D[idx1][point3D_id]
-				point2D2 = points3D_id_to_2D[idx2][point3D_id]
-				nd1 = points3D_id_to_ndepth[idx1][point3D_id]
-				nd2 = points3D_id_to_ndepth[idx2][point3D_id]
-				central_match = np.array([
-					point2D1[1], point2D1[0],
-					point2D2[1], point2D2[0]
-				])
-				self.dataset.append({
-					'image_path1': image_paths[idx1],
-					'depth_path1': depth_paths[idx1],
-					'intrinsics1': intrinsics[idx1],
-					'pose1': poses[idx1],
-					'image_path2': image_paths[idx2],
-					'depth_path2': depth_paths[idx2],
-					'intrinsics2': intrinsics[idx2],
-					'pose2': poses[idx2],
-					'central_match': central_match,
-					'scale_ratio': max(nd1 / nd2, nd2 / nd1)
-				})
+			point3D_id = np.random.choice(matches)
+			point2D1 = points3D_id_to_2D[idx1][point3D_id]
+			point2D2 = points3D_id_to_2D[idx2][point3D_id]
+			nd1 = points3D_id_to_ndepth[idx1][point3D_id]
+			nd2 = points3D_id_to_ndepth[idx2][point3D_id]
+			central_match = np.array([
+				point2D1[1], point2D1[0],
+				point2D2[1], point2D2[0]
+			])
+			self.dataset.append({
+				'image_path1': image_paths[idx1],
+				'depth_path1': depth_paths[idx1],
+				'intrinsics1': intrinsics[idx1],
+				'pose1': poses[idx1],
+				'image_path2': image_paths[idx2],
+				'depth_path2': depth_paths[idx2],
+				'intrinsics2': intrinsics[idx2],
+				'pose2': poses[idx2],
+				'central_match': central_match,
+				'scale_ratio': max(nd1 / nd2, nd2 / nd1)
+			})
 		np.random.shuffle(self.dataset)
 		if not self.train:
 			np.random.set_state(np_random_state)
@@ -147,8 +148,6 @@ class MegaDepthDataset(Dataset):
 			self.base_path, pair_metadata['image_path1']
 		)
 		image1 = Image.open(image_path1)
-		#cv.imshow(image1)
-		#print('here')
 		if image1.mode != 'RGB':
 			image1 = image1.convert('RGB')
 		image1 = np.array(image1)
