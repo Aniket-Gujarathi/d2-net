@@ -21,210 +21,6 @@ import torchgeometry as tgm
 
 matplotlib.use('Agg')
 
-def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_steps=3, plot=False):
-	output = model({
-		'image1': batch['image1'].to(device),
-		'image2': batch['image2'].to(device)
-	})
-
-	loss = torch.tensor(np.array([0], dtype=np.float32), device=device)
-	has_grad = False
-
-	n_valid_samples = 0
-	for idx_in_batch in range(batch['image1'].size(0)):
-		# Network output
-		dense_features1 = output['dense_features1'][idx_in_batch]
-		c, h1, w1 = dense_features1.size()
-		scores1 = output['scores1'][idx_in_batch].view(-1)
-
-		dense_features2 = output['dense_features2'][idx_in_batch]
-		_, h2, w2 = dense_features2.size()
-		scores2 = output['scores2'][idx_in_batch]
-
-
-		all_descriptors1 = F.normalize(dense_features1.view(c, -1), dim=0)
-		descriptors1 = all_descriptors1
-
-		all_descriptors2 = F.normalize(dense_features2.view(c, -1), dim=0)
-
-		fmap_pos1 = grid_positions(h1, w1, device)
-
-		hOrig, wOrig = int(batch['image1'].shape[2]/8), int(batch['image1'].shape[3]/8)
-		fmap_pos1Orig = grid_positions(hOrig, wOrig, device)
-		pos1 = upscale_positions(fmap_pos1Orig, scaling_steps=scaling_steps)
-
-		# get correspondences
-		img1 = imshow_image(
-						batch['image1'][idx_in_batch].cpu().numpy(),
-						preprocessing=batch['preprocessing']
-							)
-		img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
-		img2 = imshow_image(
-						batch['image2'][idx_in_batch].cpu().numpy(),
-						preprocessing=batch['preprocessing']
-							)
-		img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-
-		kp1, des1 = extract_features(img1)
-
-		kp2, des2 = extract_features(img2)
-
-		matches = match(des1, des2)
-		try:
-			pos1, pos2 = gt_corr(matches)
-		except EmptyTensorError:
-			continue
-
-		keyP1 = pt_to_torch(pos1)
-		keyP2 = pt_to_torch(pos2)
-
-		pos1 = torch.from_numpy(keyP1).to(pos1.device).float()
-		pos2 = torch.from_numpy(keyP2).to(pos2.device).float()
-
-		ids = idsAlign(pos1, device)
-
-		fmap_pos1 = fmap_pos1[:, ids]
-		descriptors1 = descriptors1[:, ids]
-		scores1 = scores1[ids]
-
-		# Skip the pair if not enough GT correspondences are available
-		if ids.size(0) < 128:
-			continue
-
-		# Descriptors at the corresponding positions
-		fmap_pos2 = torch.round(
-			downscale_positions(pos2, scaling_steps=scaling_steps)
-		).long()
-
-		descriptors2 = F.normalize(
-			dense_features2[:, fmap_pos2[0, :], fmap_pos2[1, :]],
-			dim=0
-		)
-
-		positive_distance = 2 - 2 * (
-			descriptors1.t().unsqueeze(1) @ descriptors2.t().unsqueeze(2)
-		).squeeze()
-
-		#positive_distance = getPositiveDistance(descriptors1, descriptors2)
-
-		all_fmap_pos2 = grid_positions(h2, w2, device)
-		position_distance = torch.max(
-			torch.abs(
-				fmap_pos2.unsqueeze(2).float() -
-				all_fmap_pos2.unsqueeze(1)
-			),
-			dim=0
-		)[0]
-		is_out_of_safe_radius = position_distance > safe_radius
-
-		distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
-		#distance_matrix = getDistanceMatrix(descriptors1, all_descriptors2)
-
-		negative_distance2 = torch.min(
-			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
-			dim=1
-		)[0]
-
-		#negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
-
-		all_fmap_pos1 = grid_positions(h1, w1, device)
-		position_distance = torch.max(
-			torch.abs(
-				fmap_pos1.unsqueeze(2).float() -
-				all_fmap_pos1.unsqueeze(1)
-			),
-			dim=0
-		)[0]
-		is_out_of_safe_radius = position_distance > safe_radius
-
-		distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
-		#distance_matrix = getDistanceMatrix(descriptors2, all_descriptors1)
-
-		negative_distance1 = torch.min(
-			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
-			dim=1
-		)[0]
-
-		#negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
-
-		diff = positive_distance - torch.min(
-			negative_distance1, negative_distance2
-		)
-		print('positive_distance_min', torch.min(positive_distance))
-		print('negative_distance1_min', torch.min(negative_distance1))
-		print('positive_distance_max', torch.max(positive_distance))
-		print('negative_distance1_max', torch.max(negative_distance1))
-		print('positive_distance_mean', torch.mean(positive_distance))
-		print('negative_distance1_mean', torch.mean(negative_distance1))
-
-		scores2 = scores2[fmap_pos2[0, :], fmap_pos2[1, :]]
-
-		loss = loss + (
-			torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
-			(torch.sum(scores1 * scores2) )
-		)
-
-		print('scores1_min', torch.min(scores1))
-		print('scores1_max', torch.max(scores1))
-		print('scores1_mean', torch.mean(scores1))
-
-		has_grad = True
-		n_valid_samples += 1
-
-		if plot and batch['batch_idx'] % batch['log_interval'] == 0:
-			# drawTraining(batch['image1'], batch['image2'], pos1, pos2, batch, idx_in_batch, output, save=True)
-			drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output, save=True)
-
-	if not has_grad:
-		raise NoGradientError
-	print('scores1', scores1)
-	print('scores2', scores2)
-	loss = loss / (n_valid_samples )
-
-	return loss
-
-def extract_features(img):
-	surf = cv2.SURF_create(100)
-	kp, des = surf.detectAndCompute(img, None)
-
-
-	# #display
-	# display = cv2.drawKeypoints(img, kp, None)
-	# plt.figure(figsize=(8, 6), dpi=100)
-	# plt.imshow(display)
-
-	return kp, des
-
-def match(des1, des2):
-	# create BFMatcher object
-	bf = cv2.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-    # Match descriptors.
-	matches = bf.match(des1,des2)
-
-	return matches
-
-def gt_corr(match):
-	pos1 = []
-	pos2 = []
-	for mat in match:
-		img1_idx = mat.queryIdx
-		img2_idx = mat.trainIdx
-
-		(x1, y1) = kp1[img1_idx].pt
-		(x2, y2) = kp2[img2_idx].pt
-
-		list_kp1.append((x1, y1))
-		list_kp2.append((x2, y2))
-
-	return pos1, pos2
-
-def pt_to_torch(kp):
-	keyP = [(kp[i].pt) for i in range(len(kp))]
-	keyP = np.asarray(keyP).T
-	keyP[[0, 1]] = keyP[[1, 0]]
-	keyP = np.floor(keyP) + 0.5
-
-	return keyP
 
 def loss_function(
 		model, batch, device, margin=1, safe_radius=4, scaling_steps=3, plot=False
@@ -272,6 +68,26 @@ def loss_function(
 		fmap_pos1Orig = grid_positions(hOrig, wOrig, device)
 		pos1 = upscale_positions(fmap_pos1Orig, scaling_steps=scaling_steps)
 
+		# SIFT Feature Detection
+
+		imgNp1 = imshow_image(
+						batch['image1'][idx_in_batch].cpu().numpy(),
+						preprocessing=batch['preprocessing']
+					)
+		imgNp1 = cv2.cvtColor(imgNp1, cv2.COLOR_BGR2RGB)
+		# surf = cv2.xfeatures2d.SIFT_create(100)
+		#surf = cv2.xfeatures2d.SURF_create(80)
+		orb = cv2.ORB_create(nfeatures=100, scoreType=cv2.ORB_FAST_SCORE)
+
+		kp = orb.detect(imgNp1, None)
+
+		keyP = [(kp[i].pt) for i in range(len(kp))]
+		keyP = np.asarray(keyP).T
+		keyP[[0, 1]] = keyP[[1, 0]]
+		keyP = np.floor(keyP) + 0.5
+
+		pos1 = torch.from_numpy(keyP).to(pos1.device).float()
+
 		try:
 			pos1, pos2, ids = warp(
 				pos1,
@@ -281,18 +97,31 @@ def loss_function(
 		except EmptyTensorError:
 			continue
 
-		H1 = output['H1'][idx_in_batch]
-		H2 = output['H2'][idx_in_batch]
+		ids = idsAlign(pos1, device, h1, w1)
 
-		try:
-			pos1, pos2 = homoAlign(pos1, pos2, H1, H2, device)
-		except IndexError:
-			continue
+		# cv2.drawKeypoints(imgNp1, kp, imgNp1)
+		# cv2.imshow('Keypoints', imgNp1)
+		# cv2.waitKey(0)
 
-		ids = idsAlign(pos1, device)
+		# drawTraining(batch['image1'], batch['image2'], pos1, pos2, batch, idx_in_batch, output, save=False)
 
-		img_warp1 = tgm.warp_perspective(batch['image1'].to(device), H1, dsize=(400, 400))
-		img_warp2 = tgm.warp_perspective(batch['image2'].to(device), H2, dsize=(400, 400))
+		# exit(1)
+
+
+		# Top view homography adjustment
+
+		# H1 = output['H1'][idx_in_batch]
+		# H2 = output['H2'][idx_in_batch]
+
+		# try:
+		# 	pos1, pos2 = homoAlign(pos1, pos2, H1, H2, device)
+		# except IndexError:
+		# 	continue
+
+		# ids = idsAlign(pos1, device, h1, w1)
+
+		# img_warp1 = tgm.warp_perspective(batch['image1'].to(device), H1, dsize=(400, 400))
+		# img_warp2 = tgm.warp_perspective(batch['image2'].to(device), H2, dsize=(400, 400))
 
 		# drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output)
 
@@ -302,6 +131,7 @@ def loss_function(
 
 		# Skip the pair if not enough GT correspondences are available
 		if ids.size(0) < 128:
+			print(ids.size(0))
 			continue
 
 		# Descriptors at the corresponding positions
@@ -318,7 +148,7 @@ def loss_function(
 			descriptors1.t().unsqueeze(1) @ descriptors2.t().unsqueeze(2)
 		).squeeze()
 
-		#positive_distance = getPositiveDistance(descriptors1, descriptors2)
+		# positive_distance = getPositiveDistance(descriptors1, descriptors2)
 
 		all_fmap_pos2 = grid_positions(h2, w2, device)
 		position_distance = torch.max(
@@ -331,14 +161,14 @@ def loss_function(
 		is_out_of_safe_radius = position_distance > safe_radius
 
 		distance_matrix = 2 - 2 * (descriptors1.t() @ all_descriptors2)
-		#distance_matrix = getDistanceMatrix(descriptors1, all_descriptors2)
+		# distance_matrix = getDistanceMatrix(descriptors1, all_descriptors2)
 
 		negative_distance2 = torch.min(
 			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
 			dim=1
 		)[0]
 
-		#negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		# negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
@@ -351,24 +181,18 @@ def loss_function(
 		is_out_of_safe_radius = position_distance > safe_radius
 
 		distance_matrix = 2 - 2 * (descriptors2.t() @ all_descriptors1)
-		#distance_matrix = getDistanceMatrix(descriptors2, all_descriptors1)
+		# distance_matrix = getDistanceMatrix(descriptors2, all_descriptors1)
 
 		negative_distance1 = torch.min(
 			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
 			dim=1
 		)[0]
 
-		#negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		# negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		diff = positive_distance - torch.min(
 			negative_distance1, negative_distance2
 		)
-		print('positive_distance_min', torch.min(positive_distance))
-		print('negative_distance1_min', torch.min(negative_distance1))
-		print('positive_distance_max', torch.max(positive_distance))
-		print('negative_distance1_max', torch.max(negative_distance1))
-		print('positive_distance_mean', torch.mean(positive_distance))
-		print('negative_distance1_mean', torch.mean(negative_distance1))
 
 		scores2 = scores2[fmap_pos2[0, :], fmap_pos2[1, :]]
 
@@ -377,21 +201,17 @@ def loss_function(
 			(torch.sum(scores1 * scores2) )
 		)
 
-		print('scores1_min', torch.min(scores1))
-		print('scores1_max', torch.max(scores1))
-		print('scores1_mean', torch.mean(scores1))
-
 		has_grad = True
 		n_valid_samples += 1
 
 		if plot and batch['batch_idx'] % batch['log_interval'] == 0:
-			# drawTraining(batch['image1'], batch['image2'], pos1, pos2, batch, idx_in_batch, output, save=True)
-			drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output, save=True)
+			print("Inside plot.")
+			drawTraining(batch['image1'], batch['image2'], pos1, pos2, batch, idx_in_batch, output, save=True)
+			# drawTraining(img_warp1, img_warp2, pos1, pos2, batch, idx_in_batch, output, save=True)
 
 	if not has_grad:
 		raise NoGradientError
-	print('scores1', scores1)
-	print('scores2', scores2)
+
 	loss = loss / (n_valid_samples )
 
 	return loss
@@ -597,7 +417,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	plt.axis('off')
 
 	if(save == True):
-		savefig('train_vis_PT/%s.%02d.%02d.%d.png' % (
+		savefig('train_vis_sift/%s.%02d.%02d.%d.png' % (
 			'train' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -611,18 +431,18 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
 	im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2RGB)
 
-	for i in range(0, pos1_aux.shape[1], 100):
+	for i in range(0, pos1_aux.shape[1], 1):
 		im1 = cv2.circle(im1, (pos1_aux[1, i], pos1_aux[0, i]), 1, (0, 0, 255), 2)
-	for i in range(0, pos2_aux.shape[1], 100):
+	for i in range(0, pos2_aux.shape[1], 1):
 		im2 = cv2.circle(im2, (pos2_aux[1, i], pos2_aux[0, i]), 1, (0, 0, 255), 2)
 
 	im3 = cv2.hconcat([im1, im2])
 
-	for i in range(0, pos1_aux.shape[1], 100):
+	for i in range(0, pos1_aux.shape[1], 1):
 		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
 
 	if(save == True):
-		cv2.imwrite('train_vis_PT/%s.%02d.%02d.%d.png' % (
+		cv2.imwrite('train_vis_sift/%s.%02d.%02d.%d.png' % (
 			'train_corr' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -671,17 +491,17 @@ def homoAlign(pos1, pos2, H1, H2, device):
 	return pos1Pov, pos2Pov
 
 
-def idsAlign(pos1, device):
+def idsAlign(pos1, device, h1, w1):
 	row = pos1[0, :]/8
 	col = pos1[1, :]/8
 
 	ids = []
 
 	for i in range(row.shape[0]):
-		index = (50 * row[i]) + col[i]
+		index = (h1 * row[i]) + col[i]
 		ids.append(index)
 
-	ids = torch.Tensor(ids).long()
+	ids = torch.round(torch.Tensor(ids)).long()
 
 	return ids
 
@@ -720,3 +540,22 @@ def getDistanceMatrix(descriptors1, all_descriptors2):
 
 	return distance_matrix
 
+
+# def keyPointCorr(pos1, pos2, ids, keyP):
+# 	keyP = torch.from_numpy(keyP).to(pos1.device)
+# 	# print("Keypoint: ", keyP.shape)
+# 	print("Pos1: {} Pos2: {} Id: {}".format(pos1.shape, pos2.shape, ids.shape))
+# 	# print(pos1[0, 0], pos1[1, 0])
+
+# 	print(torch.unique(pos1[0, :]))
+# 	print(torch.unique(pos1[1, :]))
+# 	# print(keyP[0, 0], keyP[1, 0])
+
+# 	newIds = []
+# 	for col in range(keyP.shape[1]):
+# 		pass
+# 		# if((keyP[0, col] in pos1[0, :]) and (keyP[1, col] in pos1[1, :])):
+# 		# 	print("True", col)
+# 		# 	newIds.append(col)
+
+# 	return None, None, None
