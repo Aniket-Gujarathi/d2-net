@@ -44,31 +44,32 @@ class PhotoTourism(Dataset):
             #print(img[1])
             img1 = Image.open(img[1])
             img2 = PhotoTourism.img_rotn(self, img1)
-            img2 = Image.open(img2)
+            #img2 = Image.open(img2)
 
             if(img1.mode != 'RGB'):
-				img1 = img1.convert('RGB')
+                img1 = img1.convert('RGB')
 
-			if(img2.mode != 'RGB'):
-				img2 = img2.convert('RGB')
+            if(img2.mode != 'RGB'):
+                img2 = img2.convert('RGB')
 
-			img1 = np.array(img1)
-			img2 = np.array(img2)
+            img1 = np.array(img1)
+            img2 = np.array(img2)
 
             self.dataset.append((img1, img2))
 
 
     def __len__(self):
-		return len(self.dataset)
+        return len(self.dataset)
 
 
-	def __getitem__(self, idx):
-		image1, image2 = self.dataset[idx]
+    def __getitem__(self, idx):
+        image1, image2 = self.dataset[idx]
 
-		image1 = preprocess_image(image1, preprocessing=self.preprocessing)
-		image2 = preprocess_image(image2, preprocessing=self.preprocessing)
+        image1 = preprocess_image(image1, preprocessing=self.preprocessing)
+        image2 = preprocess_image(image2, preprocessing=self.preprocessing)
+        print('hi', len(self.dataset))
 
-		return {
+        return {
 			'image1': torch.from_numpy(image1.astype(np.float32)),
 			'image2': torch.from_numpy(image2.astype(np.float32)),
 			}
@@ -81,3 +82,4 @@ if __name__ == '__main__':
 	training_dataset = PhotoTourism(images)
 
 	training_dataset.build_dataset()
+
