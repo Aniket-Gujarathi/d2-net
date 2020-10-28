@@ -82,6 +82,7 @@ def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_step
 		pos2 = torch.from_numpy(keyP2).to(pos2.device).float()
 
 		ids = idsAlign(pos1, device)
+		print('ids', ids)
 
 		fmap_pos1 = fmap_pos1[:, ids]
 		descriptors1 = descriptors1[:, ids]
@@ -89,6 +90,7 @@ def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_step
 
 		# Skip the pair if not enough GT correspondences are available
 		if ids.size(0) < 128:
+			print(ids.size(0))
 			continue
 
 		# Descriptors at the corresponding positions
@@ -184,7 +186,7 @@ def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_step
 	return loss
 
 def extract_features(img):
-	surf = cv2.SURF_create(100)
+	surf = cv2.xfeatures2d.SURF_create(10)
 	kp, des = surf.detectAndCompute(img, None)
 
 

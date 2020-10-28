@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 import warnings
 
-from lib.dataset import MegaDepthDataset
+from lib.dataset_PT_rotn import PhotoTourism
 from lib.exceptions import NoGradientError
 from lib.loss_PT_rot import loss_function_PT
 from lib.model import D2Net
@@ -47,6 +47,11 @@ parser.add_argument(
 parser.add_argument(
 	'--scene_info_path', type=str, required=True,
 	help='path to the processed scenes'
+)
+
+parser.add_argument(
+	'--images', type=str, required=True,
+	help='path to the image1 csv'
 )
 
 parser.add_argument(
@@ -145,12 +150,17 @@ if args.use_validation:
 		num_workers=args.num_workers
 	)
 
-training_dataset = MegaDepthDataset(
-	#scene_list_path='megadepth_utils/train_scenes.txt',
-	scene_info_path=args.scene_info_path,
-	base_path=args.dataset_path,
-	preprocessing=args.preprocessing
-)
+# training_dataset = MegaDepthDataset(
+# 	#scene_list_path='megadepth_utils/train_scenes.txt',
+# 	scene_info_path=args.scene_info_path,
+# 	base_path=args.dataset_path,
+# 	preprocessing=args.preprocessing
+# )
+
+training_dataset = PhotoTourism(args.images, args.preprocessing)
+
+training_dataset.build_dataset()
+
 training_dataloader = DataLoader(
 	training_dataset,
 	batch_size=args.batch_size,
@@ -241,7 +251,7 @@ if args.use_validation:
 # Start the training
 for epoch_idx in range(1, args.num_epochs + 1):
 	# Process epoch
-	training_dataset.build_dataset()
+	#training_dataset.build_dataset()
 	train_loss_history.append(
 		process_epoch(
 			epoch_idx,
@@ -287,3 +297,4 @@ for epoch_idx in range(1, args.num_epochs + 1):
 
 # Close the log file
 log_file.close()
+

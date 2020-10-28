@@ -13,8 +13,9 @@ from lib.utils import preprocess_image
 
 
 class PhotoTourism(Dataset):
-    def __init__(self, images):
+    def __init__(self, images, preprocessing):
         self.images = images
+        self.preprocessing = preprocessing
         self.dataset = []
 
     def getImageFiles(self):
@@ -41,7 +42,7 @@ class PhotoTourism(Dataset):
 
         imgFiles = self.getImageFiles()
         for img in (imgFiles):
-            #print(img[1])
+            print(img[1])
             img1 = Image.open(img[1])
             img2 = PhotoTourism.img_rotn(self, img1)
             #img2 = Image.open(img2)
