@@ -70,16 +70,20 @@ def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_step
 		kp2, des2 = extract_features(img2)
 
 		matches = match(des1, des2)
+
+		keyP1 = pt_transform(kp1)
+		keyP2 = pt_transform(kp2)
+
+		pos1 = torch.from_numpy(keyP1).to(pos1.device).float()
+		pos1 = torch.from_numpy(keyP2).to(pos1.device).float()
+
+
 		try:
-			pos1, pos2 = gt_corr(matches)
+			pos1, pos2 = gt_corr(kp1, kp2, matches)
 		except EmptyTensorError:
 			continue
 
-		keyP1 = pt_to_torch(pos1)
-		keyP2 = pt_to_torch(pos2)
 
-		pos1 = torch.from_numpy(keyP1).to(pos1.device).float()
-		pos2 = torch.from_numpy(keyP2).to(pos2.device).float()
 
 		ids = idsAlign(pos1, device)
 		print('ids', ids)
@@ -199,13 +203,13 @@ def extract_features(img):
 
 def match(des1, des2):
 	# create BFMatcher object
-	bf = cv2.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+	bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck=False)
     # Match descriptors.
 	matches = bf.match(des1,des2)
 
 	return matches
 
-def gt_corr(match):
+def gt_corr(kp1, kp2, match):
 	pos1 = []
 	pos2 = []
 	for mat in match:
@@ -215,12 +219,12 @@ def gt_corr(match):
 		(x1, y1) = kp1[img1_idx].pt
 		(x2, y2) = kp2[img2_idx].pt
 
-		list_kp1.append((x1, y1))
-		list_kp2.append((x2, y2))
+		pos1.append((x1, y1))
+		pos2.append((x2, y2))
 
 	return pos1, pos2
 
-def pt_to_torch(kp):
+def pt_transform(kp):
 	keyP = [(kp[i].pt) for i in range(len(kp))]
 	keyP = np.asarray(keyP).T
 	keyP[[0, 1]] = keyP[[1, 0]]
