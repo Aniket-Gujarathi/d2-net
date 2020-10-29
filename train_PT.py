@@ -298,3 +298,4 @@ for epoch_idx in range(1, args.num_epochs + 1):
 # Close the log file
 log_file.close()
 
+

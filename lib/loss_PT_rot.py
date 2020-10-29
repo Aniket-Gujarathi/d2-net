@@ -83,10 +83,11 @@ def loss_function_PT(model, batch, device, margin=1, safe_radius=4, scaling_step
 		except EmptyTensorError:
 			continue
 
+		pos1 = torch.FloatTensor(pos1)
+		pos2 = torch.FloatTensor(pos2)
 
-
-		ids = idsAlign(pos1, device)
-		print('ids', ids)
+		ids = idsAlign(pos1, device, h1, h2)
+		#print('ids', ids)
 
 		fmap_pos1 = fmap_pos1[:, ids]
 		descriptors1 = descriptors1[:, ids]
@@ -221,6 +222,7 @@ def gt_corr(kp1, kp2, match):
 
 		pos1.append((x1, y1))
 		pos2.append((x2, y2))
+
 
 	return pos1, pos2
 
@@ -677,17 +679,18 @@ def homoAlign(pos1, pos2, H1, H2, device):
 	return pos1Pov, pos2Pov
 
 
-def idsAlign(pos1, device):
-	row = pos1[0, :]/8
-	col = pos1[1, :]/8
+def idsAlign(pos1, device, h1, w1):
+	pos1D = downscale_positions(pos1, scaling_steps=3)
+	row = pos1D[0, :]
+	col = pos1D[1, :]
 
 	ids = []
 
 	for i in range(row.shape[0]):
-		index = (50 * row[i]) + col[i]
+		index = (h1 * row[i]) + col[i]
 		ids.append(index)
 
-	ids = torch.Tensor(ids).long()
+	ids = torch.round(torch.Tensor(ids)).long()
 
 	return ids
 
