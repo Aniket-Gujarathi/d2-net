@@ -117,7 +117,7 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_PT'
+	plot_path = 'train_vis'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
@@ -128,7 +128,9 @@ model = D2Net(
 	model_file=args.model_file,
 	use_cuda=use_cuda
 )
-
+totalParams = sum(p.numel() for p in model.parameters())
+trainParams = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print("Total parameters: {} | Trainable parameters: {}".format(totalParams, trainParams))
 # Optimizer
 optimizer = optim.Adam(
 	filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr
@@ -174,6 +176,10 @@ def process_epoch(
 		model, loss_function, optimizer, dataloader, device,
 		log_file, args, train=True
 ):
+
+	for param_group in optimizer.param_groups:
+		print("learning rate: {}".format(param_group['lr']))
+
 	epoch_losses = []
 
 	torch.set_grad_enabled(train)
@@ -297,5 +303,4 @@ for epoch_idx in range(1, args.num_epochs + 1):
 
 # Close the log file
 log_file.close()
-
 
