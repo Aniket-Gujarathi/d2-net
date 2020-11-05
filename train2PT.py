@@ -11,6 +11,7 @@ import torch
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 
@@ -19,8 +20,8 @@ import warnings
 # from lib.dataset import MegaDepthDataset
 # from lib.dataset2 import LabDataset
 # from lib.datasetGazebo import GazeboDataset
-from lib.datasetPhotoTourism import PhotoTourism
-
+# from lib.datasetPhotoTourism import PhotoTourism
+from lib.datasetGrid import PhotoTourism
 
 # from lib.loss2 import loss_function
 # from lib.lossSIFT import loss_function
@@ -35,6 +36,9 @@ from lib.model2 import D2Net, D2NetAlign
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 
+# Tensorboard writer
+writer = SummaryWriter('runs/PT_rot_high_angle_epoch')
+
 # Seed
 torch.manual_seed(1)
 if use_cuda:
@@ -45,7 +49,7 @@ np.random.seed(1)
 parser = argparse.ArgumentParser(description='Training script')
 
 parser.add_argument(
-	'--imgPairs', type=str, required=False, 
+	'--imgPairs', type=str, required=False,
 	help='path to opposite image pairs'
 )
 parser.add_argument(
@@ -100,7 +104,7 @@ parser.add_argument(
 parser.set_defaults(use_validation=False)
 
 parser.add_argument(
-	'--log_interval', type=int, default=50,
+	'--log_interval', type=int, default=100,
 	help='loss logging interval'
 )
 
@@ -130,14 +134,14 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis'
+	plot_path = 'train_vis_PT_rot_epoch'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
 		os.mkdir(plot_path)
 
 # Creating CNN model
-model = D2NetAlign(
+model = D2Net(
 	model_file=args.model_file,
 	use_cuda=use_cuda
 )
@@ -233,8 +237,11 @@ def process_epoch(
 		epoch_idx,
 		np.mean(epoch_losses)
 	))
-	log_file.flush()
 
+	writer.add_scalar("Loss/train", np.mean(epoch_losses), epoch_idx)
+
+	log_file.flush()
+	writer.flush()
 	# scheduler.step()
 
 	return np.mean(epoch_losses)
@@ -245,7 +252,7 @@ if os.path.isdir(args.checkpoint_directory):
 	print('[Warning] Checkpoint directory already exists.')
 else:
 	os.mkdir(args.checkpoint_directory)
-	
+
 
 # Open the log file for writing
 if os.path.exists(args.log_file):

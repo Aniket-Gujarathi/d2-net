@@ -8,6 +8,7 @@ from sys import exit
 import torch
 import torch.nn.functional as F
 
+
 from lib.utils import (
 	grid_positions,
 	upscale_positions,
@@ -51,8 +52,8 @@ def loss_function(
 
 		fmap_pos1 = grid_positions(h1, w1, device)
 
-		hOrig, wOrig = int(batch['image1'].shape[2]/8), int(batch['image1'].shape[3]/8)
-		fmap_pos1Orig = grid_positions(hOrig, wOrig, device)
+		# hOrig, wOrig = int(batch['image1'].shape[2]/8), int(batch['image1'].shape[3]/8)
+		# fmap_pos1Orig = grid_positions(hOrig, wOrig, device)
 
 		pos1 = batch['pos1'][idx_in_batch].to(device)
 		pos2 = batch['pos2'][idx_in_batch].to(device)
@@ -98,6 +99,8 @@ def loss_function(
 			dim=1
 		)[0]
 
+		# negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
 			torch.abs(
@@ -114,6 +117,8 @@ def loss_function(
 			distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.,
 			dim=1
 		)[0]
+
+		# negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		diff = positive_distance - torch.min(
 			negative_distance1, negative_distance2
@@ -148,13 +153,34 @@ def idsAlign(pos1, device, h1, w1):
 	ids = []
 
 	for i in range(row.shape[0]):
-		# index = (h1 * row[i]) + col[i]
+
 		index = ((w1) * (row[i])) + (col[i])
 		ids.append(index)
 
 	ids = torch.round(torch.Tensor(ids)).long().to(device)
 
 	return ids
+
+
+def semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin):
+	negative_distances = distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.
+	
+	negDist = []
+
+	for i, row in enumerate(negative_distances):
+		posDist = positive_distance[i]
+		
+		row = row[(posDist + margin > row) & (row > posDist)]
+		
+		if(row.size(0) == 0):
+			negDist.append(negative_distances[i, 0])
+		else:
+			perm = torch.randperm(row.size(0))
+			negDist.append(row[perm[0]])
+		
+	negDist = torch.Tensor(negDist).to(positive_distance.device)
+
+	return negDist
 
 
 def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=False):
@@ -201,7 +227,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	plt.axis('off')
 
 	if(save == True):
-		savefig('train_vis/%s.%02d.%02d.%d.png' % (
+		savefig('train_vis_PT_rot_epoch/%s.%02d.%02d.%d.png' % (
 			'train' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -215,18 +241,18 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2RGB)
 	im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2RGB)
 
-	for i in range(0, pos1_aux.shape[1], 10):
+	for i in range(0, pos1_aux.shape[1], 5):
 		im1 = cv2.circle(im1, (pos1_aux[1, i], pos1_aux[0, i]), 1, (0, 0, 255), 2)
-	for i in range(0, pos2_aux.shape[1], 10):
+	for i in range(0, pos2_aux.shape[1], 5):
 		im2 = cv2.circle(im2, (pos2_aux[1, i], pos2_aux[0, i]), 1, (0, 0, 255), 2)
 
 	im3 = cv2.hconcat([im1, im2])
 
-	for i in range(0, pos1_aux.shape[1], 10):
+	for i in range(0, pos1_aux.shape[1], 5):
 		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
 
 	if(save == True):
-		cv2.imwrite('train_vis/%s.%02d.%02d.%d.png' % (
+		cv2.imwrite('train_vis_PT_rot_epoch/%s.%02d.%02d.%d.png' % (
 			'train_corr' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
