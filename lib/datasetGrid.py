@@ -5,7 +5,7 @@ from sys import exit, argv
 import csv
 import torch
 from torch.utils.data import Dataset
-from utils import preprocess_image, grid_positions, upscale_positions
+from lib.utils import preprocess_image, grid_positions, upscale_positions
 import cv2
 from tqdm import tqdm
 
