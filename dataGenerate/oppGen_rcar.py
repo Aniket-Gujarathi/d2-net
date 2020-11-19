@@ -1,11 +1,5 @@
 import argparse
 import os
-import re
-import matplotlib.pyplot as pyt
-from datetime import datetime as dt
-from datetime import timedelta
-from image import load_image
-from camera_model import CameraModel
 import pandas as pd
 
 parser = argparse.ArgumentParser(description='Get opp image pairs')
