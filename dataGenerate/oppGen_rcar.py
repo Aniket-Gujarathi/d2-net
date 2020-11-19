@@ -27,9 +27,16 @@ pair = []
 for line_f, line_r in zip(timestamps_file_front, timestamps_file_rear):
     front.append(int(line_f.split()[0]))
     rear.append(int(line_r.split()[0]))
-k = 50
-for i in range(len(rear) - k):
-    if rear[i + k] in front:
-        print('brb', front[i], rear[i+k])
+k = 10
+# for i in range(len(rear) - k):
+#     if rear[i + k] in front:
+#         print('brb', front[i], rear[i+k])
+#     else:
+#         print('whew', front[min(range(len(front)), key=lambda j:abs(front[j] - rear[i+k]))-k], rear[i+k])
+
+for i in range(len(front) - k):
+    if front[i + k] in rear:
+        print('y', front[i], rear[i+k])
     else:
-        print('whew', front[min(range(len(front)), key=lambda j:abs(front[j] - rear[i+k]))-k], rear[i+k])
+        print('n', front[i], rear[min(range(len(rear)), key=lambda j:abs(rear[j] - front[i + k]))])
+
