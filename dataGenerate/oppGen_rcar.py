@@ -6,6 +6,7 @@ from datetime import datetime as dt
 from datetime import timedelta
 from image import load_image
 from camera_model import CameraModel
+import pandas as pd
 
 parser = argparse.ArgumentParser(description='Get opp image pairs')
 
@@ -27,16 +28,29 @@ pair = []
 for line_f, line_r in zip(timestamps_file_front, timestamps_file_rear):
     front.append(int(line_f.split()[0]))
     rear.append(int(line_r.split()[0]))
-k = 10
+k = 47
 # for i in range(len(rear) - k):
 #     if rear[i + k] in front:
 #         print('brb', front[i], rear[i+k])
 #     else:
 #         print('whew', front[min(range(len(front)), key=lambda j:abs(front[j] - rear[i+k]))-k], rear[i+k])
-
+front_pair = []
+rear_pair = []
 for i in range(len(front) - k):
     if front[i + k] in rear:
-        print('y', front[i], rear[i+k])
+        front_pair.append(front[i])
+        rear_pair.append(rear[i + k])
+        print('y', front[i], rear[i + k])
     else:
-        print('n', front[i], rear[min(range(len(rear)), key=lambda j:abs(rear[j] - front[i + k]))])
+        rear_closest = rear[min(range(len(rear)), key=lambda j:abs(rear[j] - front[i + k]))]
+        front_pair.append('/scratch/dhagash/robotcar/2014-05-06-12-54-54/stereo/centre/' + str(front[i]) + '.png')
+        rear_pair.append('/scratch/dhagash/robotcar/2014-05-06-12-54-54/rear_mono/' + str(rear_closest) + '.png')
+
+        if rear_closest == 1399381573789306:
+            break
+
+        print('n', front[i], rear_closest)
+
+df = pd.DataFrame({'front' :  front_pair, 'rear' : rear_pair})
+df.to_csv('/home/dhagash/d2-net/dataGenerate/rcar_oppPairs.csv', index=False)
 
