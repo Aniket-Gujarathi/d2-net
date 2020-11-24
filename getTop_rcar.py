@@ -16,5 +16,5 @@ trgSize = 600
 warpImg_f = cv2.warpPerspective(org_f, H, (trgSize, trgSize))
 warpImg_r = cv2.warpPerspective(org_r, H, (trgSize, trgSize))
 
-cv2.imwrite("/home/udit/d2-net/media/top_f.png", np.array(img_f))
-cv2.imwrite("/home/udit/d2-net/media/top_r.png", np.array(img_r))
+cv2.imwrite("/home/udit/d2-net/media/top_f.png", np.array(warpImg_f))
+cv2.imwrite("/home/udit/d2-net/media/top_r.png", np.array(warpImg_r))
