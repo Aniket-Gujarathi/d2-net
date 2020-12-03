@@ -6,15 +6,9 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from project_laser_into_camera import get_uvd
-
-parser = argparse.ArgumentParser(description='Project LIDAR data into camera image')
-parser.add_argument('--image_dir', type=str, help='Directory containing images')
-parser.add_argument('--laser_dir', type=str, help='Directory containing LIDAR scans')
-parser.add_argument('--poses_file', type=str, help='File containing either INS or VO poses')
-parser.add_argument('--models_dir', type=str, help='Directory containing camera models')
-parser.add_argument('--extrinsics_dir', type=str, help='Directory containing sensor extrinsics')
-parser.add_argument('--image_idx', type=int, help='Index of image to display')
-args = parser.parse_args()
+import argparse
+import os
+from image import load_image
 
 def plotPts(trgPts):
 	ax = plt.subplot(111)
@@ -23,17 +17,28 @@ def plotPts(trgPts):
 
 
 if __name__ == '__main__':
-	rgbFile = argv[1]
-	depthFile = argv[2]
+	parser = argparse.ArgumentParser(description='Project LIDAR data into camera image')
+	parser.add_argument('--image_dir', type=str, help='Directory containing images')
+	parser.add_argument('--laser_dir', type=str, help='Directory containing LIDAR scans')
+	parser.add_argument('--poses_file', type=str, help='File containing either INS or VO poses')
+	parser.add_argument('--models_dir', type=str, help='Directory containing camera models')
+	parser.add_argument('--extrinsics_dir', type=str, help='Directory containing sensor extrinsics')
+	parser.add_argument('--image_idx', type=int, help='Index of image to display')
+	args = parser.parse_args()
+	#depthFile = argv[2]
 
 	srcPts = []
 	trgPts = []
 
-	depth = np.load(depthFile)
-	img = Image.open(rgbFile)
+	#depth = np.load(depthFile)
+	#img = Image.open(rgbFile)
+	uv, depth, timestamp, model = get_uvd(args.image_dir, args.laser_dir, args.poses_file, args.models_dir, args.extrinsics_dir, args.image_idx)
+	uv = uv.astype(int)
 
+	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
+	img = load_image(image_path, model)
 	# bottom left -> bottom right -> top right -> top left
-	pts = [[23, 406], [597, 393], [522, 145], [98, 144]]
+	pts = [[556, 621], [736, 598], [707, 549], [530, 538]]
 
 	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
 	for i in range(0, len(pts)):
@@ -46,13 +51,10 @@ if __name__ == '__main__':
 	centerX = 643.788025
 	centerY = 484.407990
 
-	uv, depth, _, _ = get_uvd(args.image_dir, args.laser_dir, args.poses_file, args.models_dir, args.extrinsics_dir, args.image_idx)
 	# u = np.ravel(uv[0, :]).astype(int)
 	# v = np.ravel(uv[1, :]).astype(int)
 	for u1, v1 in pts:
-		if index(uv[0, u1]) == index(uv[1, v1]):
-			print(index(uv[0, u1]))
-			Z = depth[index(uv[0, u1])]/scalingFactor
+		Z = depth[u, v]/scalingFactor
 		X = (u1 - centerX) * Z / focalLength
 		Y = (v1 - centerY) * Z / focalLength
 
@@ -101,3 +103,4 @@ if __name__ == '__main__':
 	cv2.waitKey(0)
 	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r.png", warpImg)
 	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r_persp.png", rgb)
+
