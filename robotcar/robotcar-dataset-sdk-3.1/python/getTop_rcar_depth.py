@@ -51,10 +51,16 @@ if __name__ == '__main__':
 	centerX = 643.788025
 	centerY = 484.407990
 
-	# u = np.ravel(uv[0, :]).astype(int)
-	# v = np.ravel(uv[1, :]).astype(int)
+	print(uv.shape)
+	uv_new = []
+	for i in range(uv.shape[1]):
+		uv_new.append((uv[0, i], uv[1, i]))
+	#print(uv_new)
+
 	for u1, v1 in pts:
-		Z = depth[u, v]/scalingFactor
+		index = uv_new.index((u1, v1))
+		print(index)
+		Z = depth[index]/scalingFactor
 		X = (u1 - centerX) * Z / focalLength
 		Y = (v1 - centerY) * Z / focalLength
 
