@@ -33,16 +33,16 @@ if __name__ == '__main__':
 	#depth = np.load(depthFile)
 	#img = Image.open(rgbFile)
 	uv, depth, timestamp, model = get_uvd(args.image_dir, args.laser_dir, args.poses_file, args.models_dir, args.extrinsics_dir, args.image_idx)
-	uv = uv.astype(int)
+	#uv = uv.astype(int)
 
 	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
 	# bottom left -> bottom right -> top right -> top left
-	pts = [[556, 621], [736, 598], [707, 549], [530, 538]]
+	pts = [[253.15053852855385, 283.0046263264299], [422.34675570493152, 419.66893979729889], [421.74815046405035, 427.32752221557985], [253.82674781369053, 270.16157887964357]]
 
 	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
-	for i in range(0, len(pts)):
-		rgb = cv2.circle(rgb, (pts[i][0], pts[i][1]), 1, (0, 0, 255), 2)
+	# for i in range(0, len(pts)):
+	# 	rgb = cv2.circle(rgb, (pts[i][0], pts[i][1]), 1, (0, 0, 255), 2)
 	# cv2.imshow("Image", rgb)
 	# cv2.waitKey(0)
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 	uv_new = []
 	for i in range(uv.shape[1]):
 		uv_new.append((uv[0, i], uv[1, i]))
-	#print(uv_new)
+	print(uv_new)
 
 	for u1, v1 in pts:
 		index = uv_new.index((u1, v1))
@@ -109,4 +109,3 @@ if __name__ == '__main__':
 	cv2.waitKey(0)
 	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r.png", warpImg)
 	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r_persp.png", rgb)
-
