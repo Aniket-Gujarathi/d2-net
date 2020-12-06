@@ -15,6 +15,8 @@ def plotPts(trgPts):
 	ax.plot(trgPts[:, 1], trgPts[:, 0], 'ro')
 	plt.show()
 
+def distance(co1, co2):
+    return np.sqrt(pow(abs(co1[0] - co2[0]), 2) + pow(abs(co1[1] - co2[1]), 2))
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Project LIDAR data into camera image')
@@ -38,29 +40,32 @@ if __name__ == '__main__':
 	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
 	# bottom left -> bottom right -> top right -> top left
-	pts = [[253.15053852855385, 283.0046263264299], [422.34675570493152, 419.66893979729889], [421.74815046405035, 427.32752221557985], [253.82674781369053, 270.16157887964357]]
+	pts = [[436, 667], [751, 656], [724, 535], [524, 530]]
 
 	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
-	# for i in range(0, len(pts)):
-	# 	rgb = cv2.circle(rgb, (pts[i][0], pts[i][1]), 1, (0, 0, 255), 2)
-	# cv2.imshow("Image", rgb)
-	# cv2.waitKey(0)
+	for i in range(0, len(pts)):
+		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (0, 0, 255), 2)
+	cv2.imshow("Image", rgb)
+	cv2.waitKey(0)
 
-	scalingFactor = 1000.0
+	#scalingFactor = 100.0
 	focalLength = 964.828979
 	centerX = 643.788025
 	centerY = 484.407990
 
-	print(uv.shape)
+	#print(uv.shape)
 	uv_new = []
 	for i in range(uv.shape[1]):
 		uv_new.append((uv[0, i], uv[1, i]))
-	print(uv_new)
+	#print(uv_new)
 
 	for u1, v1 in pts:
-		index = uv_new.index((u1, v1))
+		coordinate = (u1, v1)
+		u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coordinate))
+		print(u_cl, v_cl)
+		index = uv_new.index((u_cl, v_cl))
 		print(index)
-		Z = depth[index]/scalingFactor
+		Z = depth[index]
 		X = (u1 - centerX) * Z / focalLength
 		Y = (v1 - centerY) * Z / focalLength
 
