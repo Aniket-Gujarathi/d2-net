@@ -28,7 +28,7 @@ if __name__ == '__main__':
 	parser.add_argument('--image_idx', type=int, help='Index of image to display')
 	args = parser.parse_args()
 	#depthFile = argv[2]
-
+	
 	srcPts = []
 	trgPts = []
 
@@ -39,21 +39,34 @@ if __name__ == '__main__':
 
 	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
+	## Rear points
 	# bottom left -> bottom right -> top right -> top left
-	pts = [[436, 667], [751, 656], [724, 535], [524, 530]]
+	pts = [[9, 787], [1276, 801], [768, 465], [460, 462]]
+
+	## Front points
+	# bottom left -> bottom right -> top right -> top left
+	#pts = [[9, 787], [1276, 801], [845, 545], [486, 531]]
 
 	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
+	rgb = cv2.resize(rgb, (1280, 960))
 	for i in range(0, len(pts)):
 		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (0, 0, 255), 2)
+
 	cv2.imshow("Image", rgb)
 	cv2.waitKey(0)
 
-	#scalingFactor = 100.0
-	focalLength = 964.828979
-	centerX = 643.788025
-	centerY = 484.407990
+	# ## Front camera intrinsics
+	# #scalingFactor = 100.0
+	# focalLength = 964.828979
+	# centerX = 643.788025
+	# centerY = 484.407990
 
-	#print(uv.shape)
+	## Rear camera intrinsics
+	#scalingFactor = 100.0
+	focalLength = 400.000000
+	centerX = 508.222931
+	centerY = 498.187378
+
 	uv_new = []
 	for i in range(uv.shape[1]):
 		uv_new.append((uv[0, i], uv[1, i]))
@@ -112,5 +125,5 @@ if __name__ == '__main__':
 
 	cv2.imshow("Warped", warpImg)
 	cv2.waitKey(0)
-	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r.png", warpImg)
-	cv2.imwrite("/home/udit/d2-net/media/get_TOP/gazebo_r_persp.png", rgb)
+	cv2.imwrite("/home/udit/d2-net/media/get_TOP/rcar_rear_top.png", warpImg)
+	cv2.imwrite("/home/udit/d2-net/media/get_TOP/rcar_rear.png", rgb)
