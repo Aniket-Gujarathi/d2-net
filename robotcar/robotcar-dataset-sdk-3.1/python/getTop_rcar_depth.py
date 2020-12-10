@@ -33,10 +33,7 @@ if __name__ == '__main__':
 	srcPts = []
 	trgPts = []
 
-	#depth = np.load(depthFile)
-	#img = Image.open(rgbFile)
 	uv, depth, timestamp, model = get_uvd(args.image_dir, args.laser_dir, args.poses_file, args.models_dir, args.extrinsics_dir, args.image_idx)
-	#uv = uv.astype(int)
 
 	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
@@ -55,7 +52,7 @@ if __name__ == '__main__':
 	elif camera == 'stereo':
 		## Front points
 		# bottom left -> bottom right -> top right -> top left
-		pts = [[9, 787], [1276, 801], [845, 545], [486, 531]]
+		pts = [(9, 787), (1276, 801), (845, 545), (486, 531)]
 		## Front camera intrinsics
 		#scalingFactor = 100.0
 		focalLength = 964.828979
@@ -64,26 +61,26 @@ if __name__ == '__main__':
 
 	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
 	rgb = cv2.resize(rgb, (1280, 960))
+
 	for i in range(0, len(pts)):
 		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (0, 0, 255), 2)
 
-	# cv2.imshow("Image", rgb)
-	# cv2.waitKey(0)
+	cv2.imshow("Image", rgb)
+	cv2.waitKey(0)
 
 	uv_new = []
+
 	for i in range(uv.shape[1]):
 		uv_new.append((uv[0, i], uv[1, i]))
-	#print(uv_new)
 
-	for u1, v1 in pts:
-		coordinate = (u1, v1)
-		u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coordinate))
-		print(u_cl, v_cl)
+
+	for coord in pts:
+		u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coord))
 		index = uv_new.index((u_cl, v_cl))
-		print(index)
+
 		Z = depth[index]
-		X = (u1 - centerX) * Z / focalLength
-		Y = (v1 - centerY) * Z / focalLength
+		X = (coord[0] - centerX) * Z / focalLength
+		Y = (coord[1] - centerY) * Z / focalLength
 
 		trgPts.append((X, Z))
 
