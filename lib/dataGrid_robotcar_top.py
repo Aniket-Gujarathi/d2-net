@@ -12,6 +12,7 @@ import sys
 sys.path.append("/scratch/udit/robotcar/robotcar-dataset-sdk-3.1/python/")
 from getTop_d2Net import getTop
 import argparse
+from image import load_image
 
 np.random.seed(0)
 
@@ -22,10 +23,13 @@ class PhotoTourism(Dataset):
 		self.dataset = []
 
 	def getImageFiles(self):
-		imgFiles = os.listdir(self.rootDir)
-		imgFiles = [os.path.join(self.rootDir, img) for img in imgFiles][0:1070]
-
-		return imgFiles
+		front_path = os.path.join(self.rootDir, 'stereo/centre/')
+		rear_path = os.path.join(self.rootDir, 'mono_rear/')
+		imgFiles_front = os.listdir(front_path)
+		imgFiles_rear = os.listdir(rear_path)
+		imgFiles_front = [os.path.join(front_path, img) for img in imgFiles_front][0:500]
+		imgFiles_rear = [os.path.join(rear_path, img) for img in imgFiles_rear][0:500]
+		return imgFiles_front, imgFiles_rear
 
 
 	def imgRot(self, img1, min=0, max=360):
@@ -91,6 +95,7 @@ class PhotoTourism(Dataset):
 
 		src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
 		dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
+
 		H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 		if H is None:
 			return [], []
@@ -144,13 +149,14 @@ class PhotoTourism(Dataset):
 	def build_dataset(self, cropSize=400):
 		print("Building Dataset.")
 
-		_, homographyMat = getTop()
+		imgFiles_front, imgFiles_rear = self.getImageFiles()
 
-		imgFiles = self.getImageFiles()
+		model_front, homographyMat_front = getTop('/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/stereo/centre')
+		model_rear, homographyMat_rear = getTop('/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/mono_rear')
 
-		for img in tqdm(imgFiles, total=len(imgFiles)):
-			img1 = Image.open(img)
-			img1 = cv2.warpPerspective(np.array(img1), homographyMat, (400, 400))
+		for img in tqdm(imgFiles_front, total=len(imgFiles_front)):
+			img1 = load_image(img, model_front)
+			img1 = cv2.warpPerspective(np.array(img1), homographyMat_front, (400, 400))
 			img1 = Image.fromarray(img1)
 			if(img1.mode != 'RGB'):
 				img1 = img1.convert('RGB')
@@ -158,13 +164,37 @@ class PhotoTourism(Dataset):
 				continue
 
 			#img1 = self.imgCrop(img1, cropSize)
-			img2 = self.imgRot(img1, min=0, max=360)
+			img1 = Image.fromarray(np.array(img1)).crop((0, 176, 400, 400))
+			img2 = self.imgRot(img1, min=90, max=270)
 
 			img1 = np.array(img1)
 			img2 = np.array(img2)
 
 
 			pos1, pos2 =  self.getGrid(img1, img2, minCorr=30)
+
+			if(len(pos1) == 0 or len(pos2) == 0):
+				continue
+
+			self.dataset.append((img1, img2, pos1, pos2))
+
+		for img in tqdm(imgFiles_rear, total=len(imgFiles_rear)):
+			img1 = load_image(img, model_rear)
+			img1 = cv2.warpPerspective(np.array(img1), homographyMat_rear, (400, 400))
+			img1 = Image.fromarray(img1)
+			if(img1.mode != 'RGB'):
+				img1 = img1.convert('RGB')
+			elif(img1.size[0] < cropSize or img1.size[1] < cropSize):
+				continue
+
+			#img1 = self.imgCrop(img1, cropSize)
+			img1 = Image.fromarray(np.array(img1)).crop((0, 176, 400, 400))
+			img2 = self.imgRot(img1, min=90, max=270)
+
+			img1 = np.array(img1)
+			img2 = np.array(img2)
+
+			pos1, pos2 =  self.getGrid(img1, img2, minCorr=128)
 
 			if(len(pos1) == 0 or len(pos2) == 0):
 				continue
