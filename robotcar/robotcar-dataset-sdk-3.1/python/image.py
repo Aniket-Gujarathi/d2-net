@@ -42,9 +42,11 @@ def load_image(image_path, model=None):
         pattern = BAYER_MONO
 
     img = Image.open(image_path)
-    img = demosaic(img, pattern)
-    if model:
-        img = model.undistort(img)
+    #print(img.mode)
+    if img.mode != 'RGB' and img.mode != 'BGR':
+        #print('f')
+        img = demosaic(img, pattern)
+        if model:
+            img = model.undistort(img)
 
     return np.array(img).astype(np.uint8)
-

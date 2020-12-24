@@ -21,11 +21,11 @@ def distance(co1, co2):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Project LIDAR data into camera image')
-	parser.add_argument('--image_dir', type=str, help='Directory containing images')
-	parser.add_argument('--laser_dir', type=str, help='Directory containing LIDAR scans')
-	parser.add_argument('--poses_file', type=str, help='File containing either INS or VO poses')
-	parser.add_argument('--models_dir', type=str, help='Directory containing camera models')
-	parser.add_argument('--extrinsics_dir', type=str, help='Directory containing sensor extrinsics')
+	parser.add_argument('--image_dir', type=str, help='Directory containing images', default='/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/mono_rear_rgb/')
+	parser.add_argument('--laser_dir', type=str, help='Directory containing LIDAR scans', default='/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/lms_rear')
+	parser.add_argument('--poses_file', type=str, help='File containing either INS or VO poses', default='/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/gps/ins.csv')
+	parser.add_argument('--models_dir', type=str, help='Directory containing camera models', default='/scratch/udit/robotcar/robotcar-dataset-sdk-3.1/models')
+	parser.add_argument('--extrinsics_dir', type=str, help='Directory containing sensor extrinsics', default='/scratch/udit/robotcar/robotcar-dataset-sdk-3.1/extrinsics/')
 	parser.add_argument('--image_idx', type=int, help='Index of image to display')
 	args = parser.parse_args()
 	#depthFile = argv[2]
@@ -37,59 +37,74 @@ if __name__ == '__main__':
 
 	image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
-
+	rgb = cv2.resize(img, (1280, 960))
 	camera = re.search('(stereo|mono_(left|right|rear))', args.image_dir).group(0)
 
 	if camera == 'mono_rear':
 		## Rear points
 		# bottom left -> bottom right -> top right -> top left
-		pts = [[9, 787], [1276, 801], [768, 465], [460, 462]]
+
+		pts = [(9, 787), (1179, 823), (801,466), (372,473)]
+		# pts = [(9, 787), (1265,800), (911,536), (415,531)]
 		## Rear camera intrinsics
-		#scalingFactor = 100.0
+		scalingFactor = 0.1
 		focalLength = 400.000000
 		centerX = 508.222931
 		centerY = 498.187378
 	elif camera == 'stereo':
 		## Front points
 		# bottom left -> bottom right -> top right -> top left
-		pts = [(9, 787), (1276, 801), (845, 545), (486, 531)]
+
+		#pts = [(279, 757), (1066,741), (868,601), (439,598)]
+		pts = [(9, 787), (1179, 823), (959,597), (403,559)]
+
 		## Front camera intrinsics
-		#scalingFactor = 100.0
+		scalingFactor = 1
 		focalLength = 964.828979
 		centerX = 643.788025
 		centerY = 484.407990
 
-	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
-	rgb = cv2.resize(rgb, (1280, 960))
+	#rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
 
 	for i in range(0, len(pts)):
-		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (0, 0, 255), 2)
+		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (255, 0, 255), 2)
 
 	cv2.imshow("Image", rgb)
 	cv2.waitKey(0)
 
 	uv_new = []
+	## 4 Pts
+	# for i in range(uv.shape[1]):
+	# 	uv_new.append((uv[0, i], uv[1, i]))
+	#
+	#
+	# for coord in pts:
+	# 	u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coord))
+	# 	index = uv_new.index((u_cl, v_cl))
+	#
+	# 	Z = depth[index]
+	# 	X = (coord[0] - centerX) * Z / focalLength
+	# 	Y = (coord[1] - centerY) * Z / focalLength
+	#
+	# 	trgPts.append((X, Z))
+	#
+	# trgPts = np.array(trgPts)
+	# srcPts = np.array(pts)
 
+	## All pts on road
 	for i in range(uv.shape[1]):
-		uv_new.append((uv[0, i], uv[1, i]))
+		x, y = uv[0, i], uv[1, i]
+		if(pts[3][0]<x<pts[2][0] and pts[2][1]<y<pts[0][1]):
+			uv_new.append((x, y, i))
 
-
-	for coord in pts:
-		u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coord))
-		index = uv_new.index((u_cl, v_cl))
-
-		Z = depth[index]
-		X = (coord[0] - centerX) * Z / focalLength
-		Y = (coord[1] - centerY) * Z / focalLength
-
+	for u1, v1, idx in uv_new:
+		Z = depth[idx] / scalingFactor
+		X = (u1 - centerX) * Z / focalLength
+		Y = (v1 - centerY) * Z / focalLength
 		trgPts.append((X, Z))
 
 	trgPts = np.array(trgPts)
-	srcPts = np.array(pts)
-
-	# 3D point adjustment to opencv plane
-	# trgPts[2, 1], trgPts[3, 1] = -trgPts[2, 1], -trgPts[3, 1]
-	# trgPts[:, 1] = -trgPts[:, 1]
+	srcPts = np.array(uv_new)[:,0:2]
 
 	# Making coordinates positive
 	minX = np.min(trgPts[:, 0])
@@ -113,6 +128,17 @@ if __name__ == '__main__':
 
 	# print(trgPts)
 	# plotPts(trgPts)
+	for i in range(0, len(srcPts)):
+		rgb = cv2.circle(rgb, (int(srcPts[i, 0]), int(srcPts[i, 1])), 1, (0, 0, 255), 2)
+
+	cv2.imshow("Image", rgb)
+	cv2.waitKey(0)
+
+	for i in range(0, trgPts.shape[0]):
+		rgb = cv2.circle(rgb, (int(trgPts[i, 0]), int(trgPts[i, 1])), 1, (50, 255, 50), 2)
+	cv2.imshow("Image", rgb)
+	cv2.waitKey(0)
+
 
 	homographyMat, status = cv2.findHomography(srcPts, trgPts)
 	orgImg = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
@@ -120,5 +146,7 @@ if __name__ == '__main__':
 
 	cv2.imshow("Warped", warpImg)
 	cv2.waitKey(0)
-	cv2.imwrite("/home/udit/d2-net/media/rcar_samples/1_top.png", warpImg)
-	#cv2.imwrite("/home/udit/d2-net/media/get_TOP/rcar_rear.png", rgb)
+
+	cv2.imwrite("/home/udit/d2-net/media/rcar_samples/3f_trial.png", img)
+	#warpImg = Image.fromarray(warpImg)
+	cv2.imwrite("/home/udit/d2-net/media/rcar_samples/3_ftop_trial.png", warpImg)

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from project_laser_into_camera import get_uvd
 import argparse
 import os
+import re
 from image import load_image
 
 def plotPts(trgPts):
@@ -19,75 +20,81 @@ def distance(co1, co2):
     return np.sqrt(pow(abs(co1[0] - co2[0]), 2) + pow(abs(co1[1] - co2[1]), 2))
 
 
-def getTop():
-	image_dir = '/scratch/udit/robotcar/sample/stereo/centre/'
-	laser_dir = '/scratch/udit/robotcar/sample/lms_front/'
-	poses_file = '/scratch/udit/robotcar/sample/gps/ins.csv'
+def getTop(image_dir):
+	#image_dir = '/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/mono_rear'
+	camera = re.search('(stereo|mono_(left|right|rear))', image_dir).group(0)
+	if camera == 'stereo':
+		laser_dir = '/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/lms_front/'
+	elif camera == 'mono_rear':
+		laser_dir = '/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/lms_rear/'
+
+	poses_file = '/scratch/udit/robotcar/overcast/2014-06-26-09-24-58/gps/ins.csv'
 	models_dir = '/scratch/udit/robotcar/robotcar-dataset-sdk-3.1/models'
 	extrinsics_dir = '/scratch/udit/robotcar/robotcar-dataset-sdk-3.1/extrinsics/'
-	image_idx = 25
+	image_idx = 100
 
 	srcPts = []
 	trgPts = []
 
-	#depth = np.load(depthFile)
-	#img = Image.open(rgbFile)
 	uv, depth, timestamp, model = get_uvd(image_dir, laser_dir, poses_file, models_dir, extrinsics_dir, image_idx)
-	#uv = uv.astype(int)
 
 	image_path = os.path.join(image_dir, str(timestamp) + '.png')
 	img = load_image(image_path, model)
-	# ## Rear points
-	# # bottom left -> bottom right -> top right -> top left
-	# pts = [[9, 787], [1276, 801], [768, 465], [460, 462]]
-
-	# Front points
-	# bottom left -> bottom right -> top right -> top left
-	pts = [[9, 787], [1276, 801], [845, 545], [486, 531]]
-
-	rgb = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)
-	rgb = cv2.resize(rgb, (1280, 960))
-	for i in range(0, len(pts)):
-		rgb = cv2.circle(rgb, (int(pts[i][0]), int(pts[i][1])), 1, (0, 0, 255), 2)
-
-	# cv2.imshow("Image", rgb)
-	# cv2.waitKey(0)
-
-	## Front camera intrinsics
-	#scalingFactor = 100.0
-	focalLength = 964.828979
-	centerX = 643.788025
-	centerY = 484.407990
-
-	# ## Rear camera intrinsics
-	# #scalingFactor = 100.0
-	# focalLength = 400.000000
-	# centerX = 508.222931
-	# centerY = 498.187378
+	rgb = cv2.resize(img, (1280, 960))
+	if camera == 'mono_rear':
+		## Rear points
+		# bottom left -> bottom right -> top right -> top left
+		pts = [(9, 787), (1179, 823), (868,601), (431,601)]
+		#pts = [(9, 787), (950,780), (868,601), (415,531)]
+		## Rear camera intrinsics
+		#scalingFactor = 100.0
+		focalLength = 400.000000
+		centerX = 508.222931
+		centerY = 498.187378
+	elif camera == 'stereo':
+		## Front points
+		# bottom left -> bottom right -> top right -> top left
+		pts = [(9, 787), (1152, 781), (868,601), (431,601)]
+		#pts = [(9, 787), (950,781), (868,601), (439,598)]
+		## Front camera intrinsics
+		#scalingFactor = 100.0
+		focalLength = 964.828979
+		centerX = 643.788025
+		centerY = 484.407990
 
 	uv_new = []
-	for i in range(uv.shape[1]):
-		uv_new.append((uv[0, i], uv[1, i]))
-	#print(uv_new)
+	## 4 Pts
+	# for i in range(uv.shape[1]):
+	# 	uv_new.append((uv[0, i], uv[1, i]))
+	#
+	# for coord in pts:
+	# 	u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coord))
+	# 	index = uv_new.index((u_cl, v_cl))
+	#
+	# 	Z = depth[index]
+	# 	X = (coord[0] - centerX) * Z / focalLength
+	# 	Y = (coord[1] - centerY) * Z / focalLength
+	#
+	# 	trgPts.append((X, Z))
+	#
+	# trgPts = np.array(trgPts)
+	# srcPts = np.array(pts)
 
-	for u1, v1 in pts:
-		coordinate = (u1, v1)
-		u_cl, v_cl = min(uv_new, key=lambda x:distance(x, coordinate))
-		#print(u_cl, v_cl)
-		index = uv_new.index((u_cl, v_cl))
-		#print(index)
-		Z = depth[index]
+	## All pts
+	for i in range(uv.shape[1]):
+		x, y = uv[0, i], uv[1, i]
+		if(pts[3][0]<x<pts[2][0] and pts[2][1]<y<pts[0][1]):
+			uv_new.append((x, y, i))
+
+	for u1, v1, idx in uv_new:
+		Z = depth[idx]
 		X = (u1 - centerX) * Z / focalLength
 		Y = (v1 - centerY) * Z / focalLength
-
 		trgPts.append((X, Z))
 
 	trgPts = np.array(trgPts)
-	srcPts = np.array(pts)
+	srcPts = np.array(uv_new)[:,0:2]
 
-	# 3D point adjustment to opencv plane
-	# trgPts[2, 1], trgPts[3, 1] = -trgPts[2, 1], -trgPts[3, 1]
-	# trgPts[:, 1] = -trgPts[:, 1]
 
 	# Making coordinates positive
 	minX = np.min(trgPts[:, 0])
@@ -125,7 +132,7 @@ def getTop():
 	# cv2.waitKey(0)
 	# cv2.imwrite("/home/udit/d2-net/media/get_TOP/rcar_rear_top.png", warpImg)
 	# cv2.imwrite("/home/udit/d2-net/media/get_TOP/rcar_rear.png", rgb)
-	return warpImg, homographyMat
+	return model, homographyMat
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Project LIDAR data into camera image')
