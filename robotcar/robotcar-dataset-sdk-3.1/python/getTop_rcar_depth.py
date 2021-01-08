@@ -10,6 +10,7 @@ import argparse
 import os
 import re
 from image import load_image
+from shapely.geometry import Point, Polygon
 
 def plotPts(trgPts):
 	ax = plt.subplot(111)
@@ -44,7 +45,7 @@ if __name__ == '__main__':
 		## Rear points
 		# bottom left -> bottom right -> top right -> top left
 
-		pts = [(9, 787), (1179, 823), (801,466), (372,473)]
+		pts = [(9, 787), (1179, 823), (809,556), (388,578)]
 		# pts = [(9, 787), (1265,800), (911,536), (415,531)]
 		## Rear camera intrinsics
 		scalingFactor = 0.1
@@ -56,7 +57,7 @@ if __name__ == '__main__':
 		# bottom left -> bottom right -> top right -> top left
 
 		#pts = [(279, 757), (1066,741), (868,601), (439,598)]
-		pts = [(9, 787), (1179, 823), (959,597), (403,559)]
+		pts = [(128,783), (1122,771), (899,651), (344,649)]
 
 		## Front camera intrinsics
 		scalingFactor = 1
@@ -71,6 +72,8 @@ if __name__ == '__main__':
 
 	cv2.imshow("Image", rgb)
 	cv2.waitKey(0)
+
+	poly = Polygon(pts)
 
 	uv_new = []
 	## 4 Pts
@@ -92,9 +95,15 @@ if __name__ == '__main__':
 	# srcPts = np.array(pts)
 
 	## All pts on road
+	# for i in range(uv.shape[1]):
+	# 	x, y = uv[0, i], uv[1, i]
+	# 	if(pts[3][0]<x<pts[2][0] and pts[2][1]<y<pts[0][1]):
+	# 		uv_new.append((x, y, i))
+
 	for i in range(uv.shape[1]):
+		p = Point(uv[0, i], uv[1, i])
 		x, y = uv[0, i], uv[1, i]
-		if(pts[3][0]<x<pts[2][0] and pts[2][1]<y<pts[0][1]):
+		if p.within(poly):
 			uv_new.append((x, y, i))
 
 	for u1, v1, idx in uv_new:
@@ -147,6 +156,11 @@ if __name__ == '__main__':
 	cv2.imshow("Warped", warpImg)
 	cv2.waitKey(0)
 
-	cv2.imwrite("/home/udit/d2-net/media/rcar_samples/3f_trial.png", img)
+	#cv2.imwrite("/home/udit/d2-net/media/rcar_samples/4f_trial.png", img)
 	#warpImg = Image.fromarray(warpImg)
-	cv2.imwrite("/home/udit/d2-net/media/rcar_samples/3_ftop_trial.png", warpImg)
+	if camera == 'mono_rear':
+		cv2.imwrite("/home/udit/d2-net/media/rcar_Pairs_overcast/10_rtop.png", warpImg)
+		cv2.imwrite("/home/udit/d2-net/media/rcar_Pairs_overcast/10_r.png", img)
+	elif camera == 'stereo':
+		cv2.imwrite("/home/udit/d2-net/media/rcar_Pairs_overcast/10_ftop.png", warpImg)
+		cv2.imwrite("/home/udit/d2-net/media/rcar_Pairs_overcast/10_f.png", img)

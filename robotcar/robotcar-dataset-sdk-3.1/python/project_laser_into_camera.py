@@ -25,18 +25,18 @@ from camera_model import CameraModel
 
 def get_uvd(image_dir, laser_dir, poses_file, models_dir, extrinsics_dir, image_idx):
 
-        model = CameraModel(args.models_dir, args.image_dir)
+        model = CameraModel(models_dir, image_dir)
 
-        extrinsics_path = os.path.join(args.extrinsics_dir, model.camera + '.txt')
+        extrinsics_path = os.path.join(extrinsics_dir, model.camera + '.txt')
         with open(extrinsics_path) as extrinsics_file:
             extrinsics = [float(x) for x in next(extrinsics_file).split(' ')]
 
         G_camera_vehicle = build_se3_transform(extrinsics)
         G_camera_posesource = None
 
-        poses_type = re.search('(vo|ins|rtk)\.csv', args.poses_file).group(1)
+        poses_type = re.search('(vo|ins|rtk)\.csv', poses_file).group(1)
         if poses_type in ['ins', 'rtk']:
-            with open(os.path.join(args.extrinsics_dir, 'ins.txt')) as extrinsics_file:
+            with open(os.path.join(extrinsics_dir, 'ins.txt')) as extrinsics_file:
                 extrinsics = next(extrinsics_file)
                 G_camera_posesource = G_camera_vehicle * build_se3_transform([float(x) for x in extrinsics.split(' ')])
         else:
@@ -44,35 +44,35 @@ def get_uvd(image_dir, laser_dir, poses_file, models_dir, extrinsics_dir, image_
             G_camera_posesource = G_camera_vehicle
 
 
-        timestamps_path = os.path.join(args.image_dir, os.pardir, model.camera + '.timestamps')
+        timestamps_path = os.path.join(image_dir, os.pardir, model.camera + '.timestamps')
         if not os.path.isfile(timestamps_path):
-            timestamps_path = os.path.join(args.image_dir, os.pardir, os.pardir, model.camera + '.timestamps')
+            timestamps_path = os.path.join(image_dir, os.pardir, os.pardir, model.camera + '.timestamps')
 
         timestamp = 0
         with open(timestamps_path) as timestamps_file:
             for i, line in enumerate(timestamps_file):
-                if i == args.image_idx:
+                if i == image_idx:
                     timestamp = int(line.split(' ')[0])
 
-        pointcloud, reflectance = build_pointcloud(args.laser_dir, args.poses_file, args.extrinsics_dir,
+        pointcloud, reflectance = build_pointcloud(laser_dir, poses_file, extrinsics_dir,
                                                    timestamp - 1e7, timestamp + 1e7, timestamp)
 
         pointcloud = np.dot(G_camera_posesource, pointcloud)
         #print(pointcloud)
         #print('pose', G_camera_posesource.shape)
         #print('pc', pointcloud[0].shape)
-        image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
+        image_path = os.path.join(image_dir, str(timestamp) + '.png')
         image = load_image(image_path, model)
 
         uv, depth = model.project(pointcloud, image.shape)
 
-        plt.imshow(image)
-        plt.scatter(np.ravel(uv[0, :]), np.ravel(uv[1, :]), s=2, c=depth, edgecolors='none', cmap='jet')
-        plt.xlim(0, image.shape[1])
-        plt.ylim(image.shape[0], 0)
-        plt.xticks([])
-        plt.yticks([])
-        plt.show()
+        # plt.imshow(image)
+        # plt.scatter(np.ravel(uv[0, :]), np.ravel(uv[1, :]), s=2, c=depth, edgecolors='none', cmap='jet')
+        # plt.xlim(0, image.shape[1])
+        # plt.ylim(image.shape[0], 0)
+        # plt.xticks([])
+        # plt.yticks([])
+        # plt.show()
 
         return uv, depth, timestamp, model
 
@@ -88,9 +88,8 @@ if __name__ == "__main__":
 
     uv, depth, timestamp, model = get_uvd(args.image_dir, args.laser_dir, args.poses_file, args.models_dir, args.extrinsics_dir, args.image_idx)
     #print(uv[0, :].astype(int))
-    uv = uv.astype(int)
-    print(uv[0, :].index(23))
-    print(uv[1, :].index(406))
+    #uv = uv.astype(int)
+
     image_path = os.path.join(args.image_dir, str(timestamp) + '.png')
     image = load_image(image_path, model)
 

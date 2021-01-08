@@ -60,7 +60,7 @@ for line in timestamps_file:
     current_chunk = chunk
 
     img = load_image(filename, model)
-    cv2.imwrite('/scratch/dhagash/robotcar/2014-05-06-12-54-54/rear/trainData_rgb/' + str(tokens[0]) + '.png', img)
+    cv2.imwrite('/scratch/udit/robotcar/2014-06-24-14-47-45/2014-06-24-14-47-45_stereo_centre_01/2014-06-24-14-47-45/stereo/trainData_rgb/' + str(tokens[0]) + '.png', img)
     i += 1
     #plt.imshow(img)
     #plt.xlabel(datetime)
