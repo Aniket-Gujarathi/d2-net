@@ -6,16 +6,17 @@ from sys import exit, argv
 import csv
 import torch
 from torch.utils.data import Dataset
-from lib.utils import preprocess_image
+from utils import preprocess_image
 
 
 class LabDataset(Dataset):
-	def __init__(self, rootDir, imgPairs, poses, intrinsics, preprocessing):
+	def __init__(self, rootDir, imgPairs, poses, intrinsics, preprocessing="caffe"):
 		self.rootDir = rootDir
 		self.imgPairs = imgPairs
 		self.poses = poses
 		self.intrinsics = intrinsics
 		self.preprocessing = preprocessing
+		self.dataset = []
 
 
 	def getImageFiles(self):
@@ -51,7 +52,7 @@ class LabDataset(Dataset):
 	def build_dataset(self):
 		print("Building Dataset.")
 
-		self.dataset = []
+		# self.dataset = []
 
 		imgFiles = self.getImageFiles()
 		poses1, poses2 = self.getPoses()
@@ -60,7 +61,6 @@ class LabDataset(Dataset):
 
 		for i in range(len(imgFiles)):
 			rgbFile1, depthFile1, rgbFile2, depthFile2 = imgFiles[i]
-
 			rgbFile1 = os.path.join(self.rootDir, rgbFile1)
 			depthFile1 = os.path.join(self.rootDir, depthFile1)
 			rgbFile2 = os.path.join(self.rootDir, rgbFile2)
@@ -111,7 +111,7 @@ class LabDataset(Dataset):
 
 	def __getitem__(self, idx):
 		image1, depth1, intrinsics1, pose1, bbox1, image2, depth2, intrinsics2, pose2, bbox2 = self.dataset[idx]
-
+		print(bbox1)
 		image1 = preprocess_image(image1, preprocessing=self.preprocessing)
 		image2 = preprocess_image(image2, preprocessing=self.preprocessing)
 
@@ -130,12 +130,12 @@ class LabDataset(Dataset):
 
 
 if __name__ == '__main__':
-	rootDir = "/scratch/udit/"
-
+	# rootDir = "/scratch/udit/"
+	rootDir = "/home/udit/d2-net/data_gazebo_real/"
 	imgPairs = argv[1]
 	poses = argv[2]
 	intrinsics = argv[3]
 
 	training_dataset = LabDataset(rootDir, imgPairs, poses, intrinsics)
 
-	#training_dataset.build_dataset()
+	training_dataset.build_dataset()

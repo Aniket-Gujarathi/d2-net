@@ -157,7 +157,7 @@ class PhotoTourism(Dataset):
 		for img in tqdm(imgFiles_front, total=len(imgFiles_front)):
 			img1 = load_image(img, model_front)
 			img1 = cv2.warpPerspective(np.array(img1), homographyMat_front, (400, 400))
-			img1 = Image.fromarray(img1)
+			img1 = Image.fromarray(img1).convert('LA')
 			if(img1.mode != 'RGB'):
 				img1 = img1.convert('RGB')
 			elif(img1.size[0] < cropSize or img1.size[1] < cropSize):
@@ -181,7 +181,7 @@ class PhotoTourism(Dataset):
 		for img in tqdm(imgFiles_rear, total=len(imgFiles_rear)):
 			img1 = load_image(img, model_rear)
 			img1 = cv2.warpPerspective(np.array(img1), homographyMat_rear, (400, 400))
-			img1 = Image.fromarray(img1)
+			img1 = Image.fromarray(img1).convert('LA')
 			if(img1.mode != 'RGB'):
 				img1 = img1.convert('RGB')
 			elif(img1.size[0] < cropSize or img1.size[1] < cropSize):

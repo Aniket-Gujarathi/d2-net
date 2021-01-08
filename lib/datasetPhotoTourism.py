@@ -5,7 +5,7 @@ from sys import exit, argv
 import csv
 import torch
 from torch.utils.data import Dataset
-from lib.utils import preprocess_image
+from lib.utils import preprocess_image, grid_positions, upscale_positions
 import cv2
 from tqdm import tqdm
 
@@ -26,7 +26,7 @@ class PhotoTourism(Dataset):
 
 	def imgRot(self, img1):
 		# img2 = img1.rotate(np.random.randint(low=0, high=360))
-		img2 = img1.rotate(np.random.randint(low=0, high=2))
+		img2 = img1.rotate(np.random.randint(low=0, high=15))
 
 		return img2
 

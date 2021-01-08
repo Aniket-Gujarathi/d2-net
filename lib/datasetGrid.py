@@ -20,7 +20,7 @@ class PhotoTourism(Dataset):
 
 	def getImageFiles(self):
 		imgFiles = os.listdir(self.rootDir)
-		imgFiles = [os.path.join(self.rootDir, img) for img in imgFiles]
+		imgFiles = [os.path.join(self.rootDir, img) for img in imgFiles][:1070]
 
 		return imgFiles
 
@@ -36,7 +36,7 @@ class PhotoTourism(Dataset):
 		upper = np.random.randint(low = 0, high = h - (cropSize + 10))
 
 		cropImg = img1.crop((left, upper, left+cropSize, upper+cropSize))
-		
+
 		# cropImg = cv2.cvtColor(np.array(cropImg), cv2.COLOR_BGR2RGB)
 		# cv2.imshow("Image", cropImg)
 		# cv2.waitKey(0)
@@ -46,7 +46,7 @@ class PhotoTourism(Dataset):
 	def getGrid(self, img1, img2, minCorr=128, scaling_steps=3, matcher="FLANN"):
 		im1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
 		im2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-		
+
 		surf = cv2.xfeatures2d.SURF_create(100)
 		# surf = cv2.xfeatures2d.SIFT_create()
 
@@ -54,7 +54,7 @@ class PhotoTourism(Dataset):
 		kp2, des2 = surf.detectAndCompute(im2,None)
 
 		if(len(kp1) < minCorr or len(kp2) < minCorr):
-			print("Less correspondences {} {}".format(len(kp1), len(kp2)))
+			# print("Less correspondences {} {}".format(len(kp1), len(kp2)))
 			return [], []
 
 		if(matcher == "BF"):
@@ -62,7 +62,7 @@ class PhotoTourism(Dataset):
 			bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
 			matches = bf.match(des1,des2)
 			matches = sorted(matches, key=lambda x:x.distance)
-		
+
 		elif(matcher == "FLANN"):
 
 			FLANN_INDEX_KDTREE = 0
@@ -88,7 +88,8 @@ class PhotoTourism(Dataset):
 		src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
 		dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
 		H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
+		if H is None:
+			return [], []
 		# h1, w1 = int(cropSize/(2**scaling_steps)), int(cropSize/(2**scaling_steps))
 		h1, w1 = int(im1.shape[0]/(2**scaling_steps)), int(im1.shape[1]/(2**scaling_steps))
 		device = torch.device("cpu")
@@ -97,7 +98,7 @@ class PhotoTourism(Dataset):
 		pos1 = upscale_positions(fmap_pos1, scaling_steps=scaling_steps).data.cpu().numpy()
 
 		pos1[[0, 1]] = pos1[[1, 0]]
-		
+
 		ones = np.ones((1, pos1.shape[1]))
 		pos1Homo = np.vstack((pos1, ones))
 		pos2Homo = np.dot(H, pos1Homo)
@@ -149,8 +150,8 @@ class PhotoTourism(Dataset):
 			elif(img1.size[0] < cropSize or img1.size[1] < cropSize):
 				continue
 
-			img1 = self.imgCrop(img1, cropSize)
-			img2 = self.imgRot(img1, min=90, max=270)
+			#img1 = self.imgCrop(img1, cropSize)
+			img2 = self.imgRot(img1, min=0, max=360)
 
 			img1 = np.array(img1)
 			img2 = np.array(img2)

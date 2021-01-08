@@ -7,9 +7,6 @@ import csv
 import torch
 from torch.utils.data import Dataset
 from lib.utils import preprocess_image
-import time
-import cv2
-
 
 
 class GazeboDataset(Dataset):
@@ -19,6 +16,7 @@ class GazeboDataset(Dataset):
 		self.poses = poses
 		self.intrinsics = intrinsics
 		self.preprocessing = preprocessing
+		self.dataset = []
 
 
 	def getImageFiles(self):
@@ -32,7 +30,7 @@ class GazeboDataset(Dataset):
 					continue
 				else:
 					imgFiles.append(row)
-				#print(imgFiles)
+
 		return imgFiles
 
 
@@ -54,7 +52,7 @@ class GazeboDataset(Dataset):
 	def build_dataset(self):
 		print("Building Dataset.")
 
-		self.dataset = []
+		# self.dataset = []
 
 		imgFiles = self.getImageFiles()
 		poses1, poses2 = self.getPoses()
@@ -144,4 +142,4 @@ if __name__ == '__main__':
 
 	training_dataset = GazeboDataset(rootDir, imgPairs, poses, intrinsics, 'caffe')
 
-	#training_dataset.build_dataset()
+	training_dataset.build_dataset()

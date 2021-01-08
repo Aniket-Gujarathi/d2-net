@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from lib.utils import preprocess_image
 
-
 class MegaDepthDataset(Dataset):
 	def __init__(
 			self,

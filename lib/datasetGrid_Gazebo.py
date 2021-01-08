@@ -20,8 +20,11 @@ class PhotoTourism(Dataset):
 		self.preprocessing = preprocessing
 		self.dataset = []
 
+		# points_src = torch.FloatTensor([[
+		# 	[190,210],[455,210],[633,475],[0,475],
+		# ]]).cuda()
 		points_src = torch.FloatTensor([[
-			[190,210],[455,210],[633,475],[0,475],
+			[149, 157],[447, 166],[311, 151],[322, 265],
 		]]).cuda()
 		points_dst = torch.FloatTensor([[
 			[0, 0], [399, 0], [399, 399], [0, 399],
@@ -66,7 +69,7 @@ class PhotoTourism(Dataset):
 
 		return img2
 
-	def imgCrop(self, img1, cropSize=256):
+	def imgCrop(self, img1, cropSize=400):
 		w, h = img1.size
 		left = np.random.randint(low = 0, high = w - (cropSize + 10))
 		upper = np.random.randint(low = 0, high = h - (cropSize + 10))
@@ -84,7 +87,7 @@ class PhotoTourism(Dataset):
 		img_warp2 = tgm.warp_perspective(img2, self.H2, dsize=(400, 400))
 		return img_warp1, img_warp2
 
-	def getGrid(self, img1, img2, w1, h1, w2, h2, minCorr=128, scaling_steps=3, matcher="FLANN"):
+	def getGrid(self, img1, img2, minCorr=10, scaling_steps=3, matcher="FLANN"):
 		im1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
 		im2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
 
@@ -95,7 +98,7 @@ class PhotoTourism(Dataset):
 		kp2, des2 = surf.detectAndCompute(img2,None)
 
 		if(len(kp1) < minCorr or len(kp2) < minCorr):
-			print(len(kp1))
+			print('ha', len(kp1))
 			return [], []
 
 		if(matcher == "BF"):
@@ -128,9 +131,11 @@ class PhotoTourism(Dataset):
 
 		src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
 		dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
-		H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
-		h1, w1 = int(h1/(2**scaling_steps)), int(w1/(2**scaling_steps))
+		H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+		if H is None:
+			return [], []
+		h1, w1 = int(im1.shape[0]/(2**scaling_steps)), int(im1.shape[1]/(2**scaling_steps))
 		device = torch.device("cpu")
 
 		fmap_pos1 = grid_positions(h1, w1, device)
@@ -139,6 +144,7 @@ class PhotoTourism(Dataset):
 		pos1[[0, 1]] = pos1[[1, 0]]
 
 		ones = np.ones((1, pos1.shape[1]))
+
 		pos1Homo = np.vstack((pos1, ones))
 		pos2Homo = np.dot(H, pos1Homo)
 		pos2Homo = pos2Homo/pos2Homo[2, :]
@@ -152,7 +158,7 @@ class PhotoTourism(Dataset):
 		ids = []
 		for i in range(pos2.shape[1]):
 			x, y = pos2[:, i]
-			if(x < (h2-2) and y < (w2-2)):
+			if(2 < x < (im1.shape[0]-2) and 2 < y < (im1.shape[1]-2)):
 				ids.append(i)
 		pos1 = pos1[:, ids]
 		pos2 = pos2[:, ids]
@@ -174,7 +180,7 @@ class PhotoTourism(Dataset):
 
 		return pos1, pos2
 
-	def build_dataset(self, cropSize=256):
+	def build_dataset(self, cropSize=400):
 		print("Building Dataset.")
 		#device = torch.device("cuda")
 		imgFiles = self.getimgPair()
@@ -185,9 +191,7 @@ class PhotoTourism(Dataset):
 			rgbFile2 = os.path.join(self.rootDir, rgbFile2)
 			img1 = Image.open(rgbFile1)
 			img2 = Image.open(rgbFile2)
-			w1, h1 = img1.size
-			w2, h2 = img2.size
-			#img1 = Image.open(img)
+
 
 			if(img1.mode != 'RGB'):
 				img1 = img1.convert('RGB')
@@ -221,7 +225,7 @@ class PhotoTourism(Dataset):
 			cv2.imwrite('/home/dhagash/d2-net/d2-net_udit/media/img1.jpg', img1)
 			cv2.imwrite('/home/dhagash/d2-net/d2-net_udit/media/img2.jpg', img2)
 
-			pos1, pos2 =  self.getGrid(img1, img2, w1, h1, w2, h2)
+			pos1, pos2 =  self.getGrid(img1, img2)
 
 			if(len(pos1) == 0 or len(pos2) == 0):
 				continue

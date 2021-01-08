@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
-from torchsummary import summary
+
 
 class DenseFeatureExtractionModule(nn.Module):
 	def __init__(self, finetune_feature_extraction=False, use_cuda=True):
@@ -32,7 +32,7 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		# Fix forward parameters
 		for param in self.model.parameters():
-			param.requires_grad = False
+			param.requires_grad = True
 		if finetune_feature_extraction:
 			# Unlock conv4_3
 			for param in list(self.model.parameters())[-2 :]:
@@ -40,7 +40,6 @@ class DenseFeatureExtractionModule(nn.Module):
 
 		if use_cuda:
 			self.model = self.model.cuda()
-			print(summary(self.model, (3, 640, 480)))
 
 	def forward(self, batch):
 		output = self.model(batch)
@@ -57,7 +56,7 @@ class SoftDetectionModule(nn.Module):
 
 	def forward(self, batch):
 		b = batch.size(0)
-		#print(b)
+
 		batch = F.relu(batch)
 
 		max_per_sample = torch.max(batch.view(b, -1), dim=1)[0]
@@ -69,17 +68,16 @@ class SoftDetectionModule(nn.Module):
 				self.soft_local_max_size, stride=1
 			)
 		)
-		local_max_score = exp / sum_exp
+		local_max_score = exp / (sum_exp )
 
 		depth_wise_max = torch.max(batch, dim=1)[0]
-		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1))
+		depth_wise_max_score = batch / (depth_wise_max.unsqueeze(1) )
 
 		all_scores = local_max_score * depth_wise_max_score
-
 		score = torch.max(all_scores, dim=1)[0]
 
-		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1))
-		#print(score)
+		score = score / (torch.sum(score.view(b, -1), dim=1).view(b, 1, 1) + 1e-5)
+
 		return score
 
 
@@ -111,7 +109,6 @@ class D2Net(nn.Module):
 
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
-
 
 		scores1 = scores[: b, :, :]
 		scores2 = scores[b :, :, :]

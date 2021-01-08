@@ -22,8 +22,8 @@ import warnings
 #from lib.dataset2 import LabDataset
 from lib.datasetGazebo import GazeboDataset
 from lib.exceptions import NoGradientError
-from lib.loss3 import loss_function
-from lib.model2 import D2NetAlign
+from lib.loss_SIFT import loss_function
+from lib.model2 import D2Net
 
 
 # CUDA
@@ -31,7 +31,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cuda:0" if use_cuda else "cpu")
 
 # tensorboard summary writer
-writer = SummaryWriter()
+writer = SummaryWriter('runs/trial_small_dim')
 
 # Seed
 torch.manual_seed(1)
@@ -128,14 +128,14 @@ print(args)
 
 # Create the folders for plotting if need be
 if args.plot:
-	plot_path = 'train_vis_top_500'
+	plot_path = 'train_vis_sift'
 	if os.path.isdir(plot_path):
 		print('[Warning] Plotting directory already exists.')
 	else:
 		os.mkdir(plot_path)
 
 # Creating CNN model
-model = D2NetAlign(
+model = D2Net(
 	#config = {},
 	model_file=args.model_file,
 	use_cuda=use_cuda,

@@ -164,20 +164,20 @@ def idsAlign(pos1, device, h1, w1):
 
 def semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin):
 	negative_distances = distance_matrix + (1 - is_out_of_safe_radius.float()) * 10.
-	
+
 	negDist = []
 
 	for i, row in enumerate(negative_distances):
 		posDist = positive_distance[i]
-		
+
 		row = row[(posDist + margin > row) & (row > posDist)]
-		
+
 		if(row.size(0) == 0):
 			negDist.append(negative_distances[i, 0])
 		else:
 			perm = torch.randperm(row.size(0))
 			negDist.append(row[perm[0]])
-		
+
 	negDist = torch.Tensor(negDist).to(positive_distance.device)
 
 	return negDist
@@ -227,7 +227,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	plt.axis('off')
 
 	if(save == True):
-		savefig('train_vis_PT_rot_epoch/%s.%02d.%02d.%d.png' % (
+		savefig('train_vis_rcar_bw/%s.%02d.%02d.%d.png' % (
 			'train' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -252,7 +252,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
 
 	if(save == True):
-		cv2.imwrite('train_vis_PT_rot_epoch/%s.%02d.%02d.%d.png' % (
+		cv2.imwrite('train_vis_rcar_bw/%s.%02d.%02d.%d.png' % (
 			'train_corr' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
