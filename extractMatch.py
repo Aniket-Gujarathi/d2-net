@@ -12,6 +12,7 @@ import scipy
 import scipy.io
 import scipy.misc
 
+#from lib.model_testGCN import D2Net
 from lib.model_test import D2Net
 from lib.utils import preprocess_image
 from lib.pyramid import process_multiscale
@@ -23,7 +24,7 @@ from sys import exit
 from PIL import Image
 from skimage.feature import match_descriptors
 from skimage.measure import ransac
-from skimage.transform import ProjectiveTransform
+from skimage.transform import ProjectiveTransform, AffineTransform
 
 
 parser = argparse.ArgumentParser(description='Feature extraction script')
@@ -36,8 +37,15 @@ parser.add_argument(
 # 	'--model_file', type=str, default='models/d2_tf.pth',
 # 	help='path to the full model'
 # )
+
+# WEIGHTS = 'models/d2_tf.pth'
+# WEIGHTS = '/home/dhagash/d2-net/d2-net_udit/checkpoints/checkpoint_PT_highRot_epoch/d2.15.pth'
+# WEIGHTS = 'results/train_corr14_360/checkpoints/d2.10.pth'
+WEIGHTS = 'results/train_corr15_gazebo/checkpoints/d2.10.pth'
+# WEIGHTS = 'results/train_corr16_gz_15ep_curriculum/checkpoints/d2.15.pth'
+
 parser.add_argument(
-	'--model_file', type=str, default='checkpoints1/d2.08.pth',
+	'--model_file', type=str, default=WEIGHTS,
 	help='path to the full model'
 )
 parser.add_argument(
@@ -137,8 +145,8 @@ def	drawMatches(file1, file2, feat1, feat2):
 	np.random.seed(0)
 	model, inliers = ransac(
 		(keypoints_left, keypoints_right),
-		ProjectiveTransform, min_samples=4,
-		residual_threshold=15, max_trials=1000
+		AffineTransform, min_samples=4,
+		residual_threshold=8, max_trials=10000
 	)
 	n_inliers = np.sum(inliers)
 	print('Number of inliers: %d.' % n_inliers)
@@ -147,7 +155,7 @@ def	drawMatches(file1, file2, feat1, feat2):
 	inlier_keypoints_right = [cv2.KeyPoint(point[0], point[1], 1) for point in keypoints_right[inliers]]
 	placeholder_matches = [cv2.DMatch(idx, idx, 1) for idx in range(n_inliers)]
 	image3 = cv2.drawMatches(image1, inlier_keypoints_left, image2, inlier_keypoints_right, placeholder_matches, None)
-
+	cv2.imwrite('/home/udit/d2-net/extract.png', image3)
 	plt.figure(figsize=(20, 20))
 	plt.imshow(image3)
 	plt.axis('off')
@@ -184,6 +192,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	model = D2Net(
+		#config = {},
 		model_file=args.model_file,
 		use_relu=args.use_relu,
 		use_cuda=use_cuda
