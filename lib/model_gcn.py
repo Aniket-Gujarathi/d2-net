@@ -3,12 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchvision.models as models
-from torchsummary import summary
+#from torchsummary import summary
 
 import matplotlib.pyplot as plt
 from lib.utils import imshow_image
 
-import kornia.geometry.transform as tgm
+#import kornia.geometry.transform as tgm
 
 from copy import deepcopy
 from pathlib import Path
@@ -91,26 +91,45 @@ class SoftDetectionModule(nn.Module):
 
 		return score
 
-class MLP():
+def MLP(mod, channels: list, do_bn=True):
+	""" Multi-layer perceptron """
+	n = len(channels)
+	layers = []
+	for i in range(1, n):
+		layers.append(nn.Conv2d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+		if i < (n-1):
+			if do_bn:
+				layers.append(nn.BatchNorm2d(channels[i]))
+			layers.append(nn.ReLU())
+	mod = nn.Sequential(mod, *layers)
 
-	def __init__(self, mod, channels: list, do_bn=True):
-		""" Multi-layer perceptron """
+	return nn.Sequential(*self.layers), mod
+
+
+def normalize_keypoints(kpts, image_shape):
+    """ Normalize keypoints locations based on image image_shape"""
+    _, _, height, width = image_shape
+    one = kpts.new_tensor(1)
+    size = torch.stack([one*width, one*height])[None]
+    center = size / 2
+    scaling = size.max(1, keepdim=True).values * 0.7
+    return (kpts - center[:, None, :]) / scaling[:, None, :]
+
+class KeypointEncoder(nn.Module):
+    """ Joint encoding of visual appearance and location using MLPs"""
+    def __init__(self, mod, feature_dim, layers):
+        super().__init__()
 		self.mod = mod
-		n = len(channels)
-		self.layers = []
-		for i in range(1, n):
-			self.layers.append(nn.Conv2d(channels[i - 1], channels[i], kernel_size=1, bias=True))
-			if i < (n-1):
-				if do_bn:
-					self.layers.append(nn.BatchNorm2d(channels[i]))
-				self.layers.append(nn.ReLU())
-		self.mod = nn.Sequential(self.mod, *self.layers)
+        self.encoder, self.mod = MLP(self.mod, [3] + layers + [feature_dim])
+        nn.init.constant_(self.encoder[-1].bias, 0.0)
 
-	def forward(self):
-		return nn.Sequential(*self.layers)
+    def forward(self, kpts, scores):
+        inputs = [kpts.transpose(1, 2), scores.unsqueeze(1)]
+        return self.encoder(torch.cat(inputs, dim=1))
 
 	def return_mod(self):
 		return self.mod
+
 
 def attention(query, key, value):
 	dim = query.shape[1]
@@ -147,10 +166,9 @@ class AttentionalPropagation(nn.Module):
 		self.mod = mod
 		self.attn = MultiHeadedAttention(num_heads, feature_dim, self.mod)
 		self.mod = self.attn.return_mod()
-		self.perc = MLP(self.mod, [feature_dim*2, feature_dim*2, feature_dim])
-		self.mlp = self.perc.forward()
+		self.mlp, self.mod = MLP(self.mod, [feature_dim*2, feature_dim*2, feature_dim])
+
 		nn.init.constant_(self.mlp[-1].bias, 0.0)
-		self.mod = self.perc.return_mod()
 
 	def return_mod(self):
 		return self.mod
@@ -299,6 +317,7 @@ class D2NetAlign(nn.Module):
 	default_config = {
         'descriptor_dim': 512,
         'GNN_layers': ['self', 'cross'] * 9,
+		'keypoint_encoder': [32, 64, 128, 256],
 	}
 
 	def __init__(self, config, model_file=None, use_cuda=False):
@@ -313,6 +332,10 @@ class D2NetAlign(nn.Module):
 		)
 
 		self.mod = self.dense_feature_extraction.return_mod()
+
+		self.kenc = KeypointEncoder(self.mod,
+            self.config['descriptor_dim'], self.config['keypoint_encoder'])
+
 		self.gnn = AttentionalGNN(self.mod,
             self.config['descriptor_dim'], self.config['GNN_layers'])
 
@@ -373,7 +396,7 @@ class D2NetAlign(nn.Module):
 		)
 		dense_features1 = dense_features[: b, :, :, :]
 		dense_features2 = dense_features[b :, :, :, :]
-
+		print(dense_features1.size())
 		# self.display(img_warp1, img_warp2)
 
 		# dense_features = self.dense_feature_extraction(
