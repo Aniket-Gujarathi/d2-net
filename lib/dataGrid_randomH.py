@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from lib.utils import preprocess_image, grid_positions, upscale_positions
 import cv2
 from tqdm import tqdm
+import random
 
 
 np.random.seed(0)
@@ -35,13 +36,40 @@ class PhotoTourism(Dataset):
 
 		return img2
 
+	def randomH(self, img1, min=0, max=360):
+		img1 = np.array(img1)
+		width, height = img1.shape
+		theta = np.random.randint(low=min, high=max) * (np.pi / 180)
+		Tx = width / 2
+		Ty = height / 2
+		sx = random.uniform(-1e-2, 1e-2)
+		sy = random.uniform(-1e-2, 1e-2)
+		p1 = random.uniform(-1e-4, 1e-4)
+		p2 = random.uniform(-1e-4, 1e-4)
+
+		alpha = np.cos(theta)
+		beta = np.sin(theta)
+
+		He = np.matrix([[alpha, beta, Tx * (1 - alpha) - Ty * beta], [-beta, alpha, beta * Tx + (1 - alpha) * Ty], [0, 0, 1]])
+		Ha = np.matrix([[1, sy, 0], [sx, 1, 0], [0, 0, 1]])
+		Hp = np.matrix([[1, 0, 0], [0, 1, 0], [p1, p2, 1]])
+
+		H = He @ Ha @ Hp
+
+		img2 = cv2.warpPerspective(img1, H, dsize=(400, 400))
+
+		#cv2.imshow("Image", img2)
+		#cv2.waitKey(0)
+
+		return img2, H
+
 	def imgCrop(self, img1, cropSize=256):
 		w, h = img1.size
 		left = np.random.randint(low = 0, high = w - (cropSize + 10))
 		upper = np.random.randint(low = 0, high = h - (cropSize + 10))
 
 		cropImg = img1.crop((left, upper, left+cropSize, upper+cropSize))
-		
+
 		# cropImg = cv2.cvtColor(np.array(cropImg), cv2.COLOR_BGR2RGB)
 		# cv2.imshow("Image", cropImg)
 		# cv2.waitKey(0)
@@ -73,60 +101,60 @@ class PhotoTourism(Dataset):
 			r = width / float(w)
 			dim = (width, int(h * r))
 
-		# resize the image
 		resized = cv2.resize(image, dim, interpolation = inter)
 
 		# return the resized image
+		# resize the image
 		return resized
 
-	def getGrid(self, im1, im2, minCorr=128, scaling_steps=3, matcher="FLANN"):
-		# im1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
-		# im2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+	def getGrid(self, im1, im2, H, minCorr=128, scaling_steps=3, matcher="FLANN"):
+		# # im1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+		# # im2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+		#
+		#
+		# surf = cv2.xfeatures2d.SURF_create(100)
+		# # surf = cv2.xfeatures2d.SIFT_create()
+		#
+		# kp1, des1 = surf.detectAndCompute(im1,None)
+		# kp2, des2 = surf.detectAndCompute(im2,None)
+		#
+		# if(len(kp1) < minCorr or len(kp2) < minCorr):
+		# 	# print("Less correspondences {} {}".format(len(kp1), len(kp2)))
+		# 	return [], []
+		#
+		# if(matcher == "BF"):
+		#
+		# 	bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+		# 	matches = bf.match(des1,des2)
+		# 	matches = sorted(matches, key=lambda x:x.distance)
+		#
+		# elif(matcher == "FLANN"):
+		#
+		# 	FLANN_INDEX_KDTREE = 0
+		# 	index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+		# 	search_params = dict(checks = 50)
+		# 	flann = cv2.FlannBasedMatcher(index_params, search_params)
+		# 	matches = flann.knnMatch(des1,des2,k=2)
+		# 	good = []
+		# 	for m, n in matches:
+		# 		if m.distance < 0.7*n.distance:
+		# 			good.append(m)
+		# 	matches = good
+		#
+		# if(len(matches) > 800):
+		# 	matches = matches[0:800]
+		# elif(len(matches) < minCorr):
+		# 	return [], []
+		#
+		# # im4 = cv2.drawMatches(im1, kp1, im2, kp2, matches, None, flags=2)
+		# # cv2.imshow('Image4', im4)
+		# # cv2.waitKey(0)
+		#
+		# src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
+		# dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
+		# H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
-		
-		surf = cv2.xfeatures2d.SURF_create(100)
-		# surf = cv2.xfeatures2d.SIFT_create()
-
-		kp1, des1 = surf.detectAndCompute(im1,None)
-		kp2, des2 = surf.detectAndCompute(im2,None)
-
-		if(len(kp1) < minCorr or len(kp2) < minCorr):
-			# print("Less correspondences {} {}".format(len(kp1), len(kp2)))
-			return [], []
-
-		if(matcher == "BF"):
-
-			bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-			matches = bf.match(des1,des2)
-			matches = sorted(matches, key=lambda x:x.distance)
-		
-		elif(matcher == "FLANN"):
-
-			FLANN_INDEX_KDTREE = 0
-			index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-			search_params = dict(checks = 50)
-			flann = cv2.FlannBasedMatcher(index_params, search_params)
-			matches = flann.knnMatch(des1,des2,k=2)
-			good = []
-			for m, n in matches:
-				if m.distance < 0.7*n.distance:
-					good.append(m)
-			matches = good
-
-		if(len(matches) > 800):
-			matches = matches[0:800]
-		elif(len(matches) < minCorr):
-			return [], []
-
-		# im4 = cv2.drawMatches(im1, kp1, im2, kp2, matches, None, flags=2)
-		# cv2.imshow('Image4', im4)
-		# cv2.waitKey(0)
-
-		src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
-		dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
-		H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
-		# h1, w1 = int(cropSize/(2**scaling_steps)), int(cropSize/(2**scaling_steps))
+		#h1, w1 = int(cropSize/(2**scaling_steps)), int(cropSize/(2**scaling_steps))
 		h1, w1 = int(im1.shape[0]/(2**scaling_steps)), int(im1.shape[1]/(2**scaling_steps))
 		device = torch.device("cpu")
 
@@ -134,7 +162,7 @@ class PhotoTourism(Dataset):
 		pos1 = upscale_positions(fmap_pos1, scaling_steps=scaling_steps).data.cpu().numpy()
 
 		pos1[[0, 1]] = pos1[[1, 0]]
-		
+
 		ones = np.ones((1, pos1.shape[1]))
 		pos1Homo = np.vstack((pos1, ones))
 		pos2Homo = np.dot(H, pos1Homo)
@@ -177,7 +205,7 @@ class PhotoTourism(Dataset):
 		print("Building Dataset.")
 
 		imgFiles = self.getImageFiles()
-		#imgFiles = imgFiles[0:len(imgFiles):5]
+		imgFiles = imgFiles[0:5]
 
 		for img in tqdm(imgFiles, total=len(imgFiles)):
 			img1 = Image.open(img).convert('L').resize((500, 500))
@@ -194,7 +222,8 @@ class PhotoTourism(Dataset):
 				continue
 
 			img1 = self.imgCrop(img1, cropSize)
-			img2 = self.imgRot(img1, min=0, max=360)
+			#img2 = self.imgRot(img1, min=0, max=360)
+			img2, H = self.randomH(img1, min=0, max=360)
 
 			img1 = np.array(img1)
 			img2 = np.array(img2)
@@ -205,7 +234,7 @@ class PhotoTourism(Dataset):
 			img2 = img2[:, :, np.newaxis]
 			img2 = np.repeat(img2, 3, -1)
 
-			pos1, pos2 =  self.getGrid(img1, img2, minCorr=128)
+			pos1, pos2 =  self.getGrid(img1, img2, H, minCorr=128)
 
 			if(len(pos1) == 0 or len(pos2) == 0):
 				continue
@@ -239,4 +268,3 @@ if __name__ == '__main__':
 
 	data = training_dataset[0]
 	print(data['image1'].shape, data['image2'].shape, data['pos1'].shape, data['pos2'].shape, len(training_dataset))
-

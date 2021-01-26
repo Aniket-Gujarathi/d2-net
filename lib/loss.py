@@ -6,8 +6,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from torch.utils.tensorboard import SummaryWriter
-
 from lib.utils import (
 	grid_positions,
 	upscale_positions,
@@ -19,8 +17,6 @@ from lib.exceptions import NoGradientError, EmptyTensorError
 
 matplotlib.use('Agg')
 
-# Tensorboard writer
-writer = SummaryWriter('runs/d2_500')
 
 def loss_function(
 		model, batch, device, margin=1, safe_radius=4, scaling_steps=3, plot=False
@@ -124,8 +120,7 @@ def loss_function(
 		diff = positive_distance - torch.min(
 			negative_distance1, negative_distance2
 		)
-		#print('pos_dist', positive_distance)
-		#print('neg_dist', negative_distance1)
+
 		scores2 = scores2[fmap_pos2[0, :], fmap_pos2[1, :]]
 
 		loss = loss + (
@@ -133,10 +128,6 @@ def loss_function(
 			torch.sum(scores1 * scores2)
 		)
 
-		
-		print('min_scores1', torch.min(scores1))
-		print('max_scores1', torch.max(scores1))
-		print('mean_scores1', torch.mean(scores1))
 		has_grad = True
 		n_valid_samples += 1
 
@@ -181,7 +172,7 @@ def loss_function(
 				cmap='Reds'
 			)
 			plt.axis('off')
-			savefig('train_vis_500_tf/%s.%02d.%02d.%d.png' % (
+			savefig('train_vis/%s.%02d.%02d.%d.png' % (
 				'train' if batch['train'] else 'valid',
 				batch['epoch_idx'],
 				batch['batch_idx'] // batch['log_interval'],

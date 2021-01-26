@@ -99,7 +99,7 @@ def loss_function(
 			dim=1
 		)[0]
 
-		# negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		#negative_distance2 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		all_fmap_pos1 = grid_positions(h1, w1, device)
 		position_distance = torch.max(
@@ -118,7 +118,7 @@ def loss_function(
 			dim=1
 		)[0]
 
-		# negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
+		#negative_distance1 = semiHardMine(distance_matrix, is_out_of_safe_radius, positive_distance, margin)
 
 		diff = positive_distance - torch.min(
 			negative_distance1, negative_distance2
@@ -128,7 +128,7 @@ def loss_function(
 
 		loss = loss + (
 			torch.sum(scores1 * scores2 * F.relu(margin + diff)) /
-			(torch.sum(scores1 * scores2) )
+			(torch.sum(scores1 * scores2) + 1e-5 )
 		)
 
 		has_grad = True
@@ -227,7 +227,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 	plt.axis('off')
 
 	if(save == True):
-		savefig('train_vis_rcar_bw/%s.%02d.%02d.%d.png' % (
+		savefig('train_vis_road_randomH/%s.%02d.%02d.%d.png' % (
 			'train' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
@@ -252,7 +252,7 @@ def drawTraining(image1, image2, pos1, pos2, batch, idx_in_batch, output, save=F
 		im3 = cv2.line(im3, (int(pos1_aux[1, i]), int(pos1_aux[0, i])), (int(pos2_aux[1, i]) +  im1.shape[1], int(pos2_aux[0, i])), (0, 255, 0), 1)
 
 	if(save == True):
-		cv2.imwrite('train_vis_rcar_bw/%s.%02d.%02d.%d.png' % (
+		cv2.imwrite('train_vis_road_trial/%s.%02d.%02d.%d.png' % (
 			'train_corr' if batch['train'] else 'valid',
 			batch['epoch_idx'],
 			batch['batch_idx'] // batch['log_interval'],
