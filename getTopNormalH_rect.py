@@ -5,6 +5,7 @@ import math
 import numpy as np
 import copy
 import cv2
+import time
 import matplotlib.pyplot as plt
 
 
@@ -23,6 +24,8 @@ def getPointCloud(rgbFile, depthFile, segmFile):
 	depth = np.load(depthFile)
 	rgb = Image.open(rgbFile)
 	segm = Image.open(segmFile)
+	road = rgb
+
 	print(rgb.size)
 	print(segm.size)
 	print(np.unique(depth))
@@ -30,11 +33,12 @@ def getPointCloud(rgbFile, depthFile, segmFile):
 	points = []
 	colors = []
 	srcPxs = []
-
+	#road_img = np.zeros((depth.shape[1], depth.shape[0], 3))
 	for v in range(depth.shape[0]):
 		for u in range(depth.shape[1]):
 			#print(segm[v, u], v, u)
 			if segm.getpixel((u, v))[0] == 255:
+				#road_img[u, v] = rgb.getpixel((u, v))
 				Z = depth[v, u] / scalingFactor
 				if Z==0: continue
 				if (Z > max_thresh or Z < min_thresh): continue
@@ -45,7 +49,11 @@ def getPointCloud(rgbFile, depthFile, segmFile):
 				srcPxs.append((u, v))
 				points.append((X, Y, Z))
 				colors.append(rgb.getpixel((u, v)))
+			else:
+				print('afd')
+				road.putpixel((u, v), (0, 0, 0))
 
+	road.show()
 
 	srcPxs = np.asarray(srcPxs).T
 	points = np.asarray(points)
@@ -58,7 +66,7 @@ def getPointCloud(rgbFile, depthFile, segmFile):
 
 	downpcd = pcd.voxel_down_sample(voxel_size=0.03)
 
-	return pcd, srcPxs
+	return pcd, srcPxs, road
 
 
 def rotationMatrixFromVectors(vec1, vec2):
@@ -173,7 +181,7 @@ def getImg(pcd, T):
 	cv2.waitKey(0)
 
 
-def getImgHomo(pcd, T, srcPxs, rgbFile):
+def getImgHomo(pcd, T, srcPxs, rgbFile, road_img):
 	pcd = getPointsInCamera(pcd, T)
 
 	pcdPoints, pcdColor = extractPCD(pcd)
@@ -190,7 +198,7 @@ def getImgHomo(pcd, T, srcPxs, rgbFile):
 	cv2.waitKey(0)
 
 	homographyMat, status = cv2.findHomography(srcPxs.T, trgPxs.T)
-	orgImg = cv2.cvtColor(np.array(Image.open(rgbFile)), cv2.COLOR_BGR2RGB)
+	orgImg = cv2.cvtColor(np.array(road_img), cv2.COLOR_BGR2RGB)
 	warpImg = cv2.warpPerspective(orgImg, homographyMat, (imgSize, imgSize))
 
 
@@ -222,7 +230,7 @@ if __name__ == '__main__':
 	# centerY = 498.187378
 	# scalingFactor = 0.1
 
-	pcd, srcPxs = getPointCloud(rgbFile, depthFile, segmFile)
+	pcd, srcPxs, road = getPointCloud(rgbFile, depthFile, segmFile)
 
 	# surfaceNormal = -getNormals(pcd)
 	surfaceNormal, planeDis = getPlane(pcd)
@@ -236,6 +244,6 @@ if __name__ == '__main__':
 	display(pcd, T)
 
 	#getImg(pcd, T)
-	getImgHomo(pcd, T, srcPxs, rgbFile)
+	getImgHomo(pcd, T, srcPxs, rgbFile, road)
 	surfaceNormal, planeDis = getPlane(pcd)
 	print(planeDis)
