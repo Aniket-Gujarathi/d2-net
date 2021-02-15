@@ -7,6 +7,7 @@ import copy
 import cv2
 import matplotlib.pyplot as plt
 from shapely.geometry import Point, Polygon
+import os
 
 
 def display(pcd, T=np.identity(4)):
@@ -31,9 +32,9 @@ def getPointCloud(rgbFile, depthFile):
 	# pts = [(310, 461), (402, 222), (401, 37), (217, 125)]
 	# 905
 	# pts = [(44, 394), (353, 392), (541, 322), (316, 160)]
-	# poly = Polygon(pts)
 	pts = [(x_c[0], y_c[0]), (x_c[1], y_c[1]), (x_c[2], y_c[2]), (x_c[3], y_c[3])]
 	poly = Polygon(pts)
+
 	# thresh = 5.6
 	thresh = 15.0
 
@@ -171,8 +172,8 @@ def getImgHomo(pcd, T, srcPxs, rgbFile):
 	orgImg = cv2.cvtColor(np.array(Image.open(rgbFile)), cv2.COLOR_BGR2RGB)
 	warpImg = cv2.warpPerspective(orgImg, homographyMat, (imgSize, imgSize))
 
-	cv2.imshow("Image", warpImg)
-	cv2.waitKey(0)
+	# cv2.imshow("Image", warpImg)
+	# cv2.waitKey(0)
 
 	return warpImg, homographyMat
 
@@ -232,29 +233,31 @@ def click_event(event, x, y, flags, params):
 if __name__ == '__main__':
 	rgbFile = argv[1]
 	depthFile = argv[2]
+	i = 0
+	for im, dep in zip(os.listdir(rgbFile), os.listdir(depthFile)):
+		# Realsense D415
+		# focalX = 607.8118896484375
+		# focalY = 606.7265625
+		# centerX = 324.09228515625
+		# centerY = 235.1124725341797
 
-	# Realsense D415
-	# focalX = 607.8118896484375
-	# focalY = 606.7265625
-	# centerX = 324.09228515625
-	# centerY = 235.1124725341797
+		# Realsense D455
+		focalX = 382.1996765136719
+		focalY = 381.8395690917969
+		centerX = 312.7102355957031
+		centerY = 247.72047424316406
 
-	# Realsense D455
-	focalX = 382.1996765136719
-	focalY = 381.8395690917969
-	centerX = 312.7102355957031
-	centerY = 247.72047424316406
+		scalingFactor = 1000.0
 
-	scalingFactor = 1000.0
+		img = cv2.imread(os.path.join(rgbFile, im))
+		cv2.imshow('image', img)
 
-	img = cv2.imread(rgbFile)
-	cv2.imshow('image', img)
+		cv2.setMouseCallback('image', click_event)
+		cv2.waitKey(0)
+		cv2.destroyAllWindows()
 
-	cv2.setMouseCallback('image', click_event)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
+		warpImg, homographyMat = getTopImage(os.path.join(rgbFile, im), os.path.join(depthFile, dep))
 
-	warpImg, homographyMat = getTopImage(rgbFile, depthFile)
-
-	cv2.imwrite('top1000img.png', warpImg)
-	np.save('top1000.npy', homographyMat)
+		cv2.imwrite('indoor/top/rgb' + str(i) + 'img.png', warpImg)
+		np.save('indoor/H/H' + str(i) + '.npy', homographyMat)
+		i += 1
